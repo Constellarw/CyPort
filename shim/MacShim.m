@@ -65,6 +65,7 @@ static BOOL MSMirrorFit(UIView *v, CGRect *r);
 
 static void MSLogf(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 static BOOL g_cursorHidden = NO, g_pointerLocked = NO;
+static BOOL g_realPad;
 static CGPoint g_mouse;                                  /* Cocoa coords: origin bottom-left, points */
 static NSUInteger g_modFlags = 0;
 
@@ -3210,7 +3211,6 @@ static CATextLayer *MSTextLayer(CGFloat size, BOOL mono, UIColor *color) {
  * toggled with the 🎮 button. Off entirely with TouchControls = NO; LookSpeed (default 1) scales the camera. */
 static GCController *g_vpad;
 static IMP g_origControllers, g_origCurrent;
-static BOOL g_realPad;               /* a real controller is connected: the virtual one is withdrawn from the game */
 static NSArray *ms_controllers(id self, SEL _cmd) {
     NSArray *a = ((NSArray *(*)(id, SEL))g_origControllers)(self, _cmd);
     return g_vpad && !g_realPad ? [a ?: @[] arrayByAddingObject:g_vpad] : a;
