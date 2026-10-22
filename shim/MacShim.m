@@ -1537,6 +1537,94 @@ static BOOL MSTextSetRaw(NSMutableString *txt, NSString *name, NSString *value, 
     if (!value || [old isEqualToString:value]) return NO;
     [txt replaceCharactersInRange:[vm rangeAtIndex:2] withString:value]; return YES;
 }
+
+static BOOL MSTextSetGroupRaw(NSMutableString *txt, NSString *group, NSString *name, NSString *value, NSString **was) {
+    if (!txt || !group || !name) return NO;
+    NSRange gr = [txt rangeOfString:[NSString stringWithFormat:@"\"group_name\"\\s*:\\s*\"%@\"", group] options:NSRegularExpressionSearch];
+    if (gr.location == NSNotFound) return NO;
+    NSRange nextGroup = [txt rangeOfString:@"\"group_name\"\\s*:" options:NSRegularExpressionSearch range:NSMakeRange(gr.location + gr.length, txt.length - (gr.location + gr.length))];
+    NSUInteger groupEnd = (nextGroup.location != NSNotFound) ? nextGroup.location : txt.length;
+    NSRange searchRange = NSMakeRange(gr.location, groupEnd - gr.location);
+
+    NSRange nr = [txt rangeOfString:[NSString stringWithFormat:@"\"name\"\\s*:\\s*\"%@\"", name] options:NSRegularExpressionSearch range:searchRange];
+    if (nr.location == NSNotFound) return NO;
+    NSRange open = [txt rangeOfString:@"{" options:NSBackwardsSearch range:NSMakeRange(searchRange.location, nr.location - searchRange.location)];
+    NSRange close = [txt rangeOfString:@"}" options:0 range:NSMakeRange(nr.location, groupEnd - nr.location)];
+    if (open.location == NSNotFound || close.location == NSNotFound) return NO;
+    NSRange obj = NSMakeRange(open.location, close.location - open.location + 1);
+
+    NSRegularExpression *vre = [NSRegularExpression regularExpressionWithPattern:@"(\"value\"\\s*:\\s*)([^,\\s}\"]+)" options:0 error:nil];
+    NSTextCheckingResult *vm = [vre firstMatchInString:txt options:0 range:obj];
+    if (!vm) return NO;
+    NSString *old = [txt substringWithRange:[vm rangeAtIndex:2]]; if (was) *was = old;
+    if (!value || [old isEqualToString:value]) return NO;
+    [txt replaceCharactersInRange:[vm rangeAtIndex:2] withString:value];
+    return YES;
+}
+
+static BOOL MSTextSetGroupIntList(NSMutableString *txt, NSString *group, NSString *name, NSString *value, NSInteger index) {
+    if (!txt || !group || !name) return NO;
+    NSRange gr = [txt rangeOfString:[NSString stringWithFormat:@"\"group_name\"\\s*:\\s*\"%@\"", group] options:NSRegularExpressionSearch];
+    if (gr.location == NSNotFound) return NO;
+    NSRange nextGroup = [txt rangeOfString:@"\"group_name\"\\s*:" options:NSRegularExpressionSearch range:NSMakeRange(gr.location + gr.length, txt.length - (gr.location + gr.length))];
+    NSUInteger groupEnd = (nextGroup.location != NSNotFound) ? nextGroup.location : txt.length;
+    NSRange searchRange = NSMakeRange(gr.location, groupEnd - gr.location);
+
+    NSRange nr = [txt rangeOfString:[NSString stringWithFormat:@"\"name\"\\s*:\\s*\"%@\"", name] options:NSRegularExpressionSearch range:searchRange];
+    if (nr.location == NSNotFound) return NO;
+    NSRange open = [txt rangeOfString:@"{" options:NSBackwardsSearch range:NSMakeRange(searchRange.location, nr.location - searchRange.location)];
+    NSRange close = [txt rangeOfString:@"}" options:0 range:NSMakeRange(nr.location, groupEnd - nr.location)];
+    if (open.location == NSNotFound || close.location == NSNotFound) return NO;
+    NSRange obj = NSMakeRange(open.location, close.location - open.location + 1);
+
+    BOOL ch = NO;
+    if (index >= 0) {
+        NSRegularExpression *ire = [NSRegularExpression regularExpressionWithPattern:@"(\"index\"\\s*:\\s*)(\\d+)" options:0 error:nil];
+        NSTextCheckingResult *im = [ire firstMatchInString:txt options:0 range:obj];
+        if (im) {
+            NSString *oldIdx = [txt substringWithRange:[im rangeAtIndex:2]];
+            NSString *newIdx = [NSString stringWithFormat:@"%ld", (long)index];
+            if (![oldIdx isEqualToString:newIdx]) {
+                [txt replaceCharactersInRange:[im rangeAtIndex:2] withString:newIdx];
+                ch = YES;
+                close = [txt rangeOfString:@"}" options:0 range:NSMakeRange(nr.location, groupEnd - nr.location)];
+                obj = NSMakeRange(open.location, close.location - open.location + 1);
+            }
+        }
+    }
+    NSRegularExpression *vre = [NSRegularExpression regularExpressionWithPattern:@"(\"value\"\\s*:\\s*)([^,\\s}\"]+)" options:0 error:nil];
+    NSTextCheckingResult *vm = [vre firstMatchInString:txt options:0 range:obj];
+    if (vm) {
+        NSString *oldVal = [txt substringWithRange:[vm rangeAtIndex:2]];
+        if (value && ![oldVal isEqualToString:value]) {
+            [txt replaceCharactersInRange:[vm rangeAtIndex:2] withString:value];
+            ch = YES;
+        }
+    }
+    return ch;
+}
+
+static BOOL MSApplyMobileUI(NSMutableString *txt) {
+    if (!txt) return NO;
+    BOOL ch = NO;
+    ch |= MSTextSetGroupRaw(txt, @"/accessibility/interface", @"BigFont", @"true", NULL);
+    ch |= MSTextSetGroupRaw(txt, @"/accessibility/interface", @"HudScaling", @"true", NULL);
+    ch |= MSTextSetGroupRaw(txt, @"/gameplay/hud", @"HudScaling", @"125", NULL);
+    ch |= MSTextSetGroupIntList(txt, @"/accessibility/subtitles", @"TextSize", @"62", 5);
+    ch |= MSTextSetGroupIntList(txt, @"/accessibility/subtitles", @"ChattersTextSize", @"62", 4);
+    ch |= MSTextSetGroupRaw(txt, @"/accessibility/subtitles", @"BackgroundOpacity", @"100.0", NULL);
+    ch |= MSTextSetGroupRaw(txt, @"/accessibility/subtitles", @"Radio", @"true", NULL);
+    if (ch) MSLogf(@"mobile UI: high-visibility HUD & texts applied (BigFont=true, HudScaling=125%%, SubtitleSize=62, BackgroundOpacity=100%%)");
+    return ch;
+}
+
+static BOOL MSUltraPerformanceOn(void) {
+    id cfg = MSConfig()[@"UltraPerformance"] ?: MSConfig()[@"Steady30"];
+    if (cfg) return [cfg boolValue];
+    NSNumber *u = [NSUserDefaults.standardUserDefaults objectForKey:@"CyPortUltraPerformance"];
+    if (u) return [u boolValue];
+    return YES; // Default on to protect 30 FPS in open world while maintaining sharp HUD
+}
 /* at Play: pick the pacing mode and set the game's own frame limiter to match (it sleeps early in the frame, which
    keeps input latency low; CyPort's limiter only steps in below it, e.g. Auto dropping to 30). Frame generation
    presents made-up frames in between, so with it on CyPort leaves pacing to the game. */
@@ -1608,10 +1696,10 @@ static void MSRestoreDRSRange(void) {
     [t replaceCharactersInRange:[m rangeAtIndex:2] withString:@"50"]; [t writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 static BOOL MSApplySteady30(NSMutableString *txt) {
-    /* Measured over 4 hot city drives (2026-10-16): fixed MetalFX Performance 26.2 FPS avg (47 % of the time 28+), with the
-       game's DRS 21-23 FPS even at a smaller render size - DRS itself costs frames here. So it is opt-in (Steady30 = YES),
-       and the one CyPort switched on is switched back off once (CyPortDRSReverted). */
-    if (![MSConfig()[@"Steady30"] boolValue]) {
+    /* Ultra Performance Mode:
+       Hold 30 FPS by dynamically scaling 3D rendering down to 35% in heavy open-world areas,
+       while the HUD, subtitles, and menus stay rendered at full resolution. */
+    if (!MSUltraPerformanceOn()) {
         NSUserDefaults *u = NSUserDefaults.standardUserDefaults; BOOL ch = NO;
         if ([u boolForKey:@"CyPortSteady30v2"] && ![u boolForKey:@"CyPortDRSReverted"]) {
             ch |= MSTextSetRaw(txt, @"DynamicResolutionScaling", @"false", NULL);
@@ -1620,28 +1708,31 @@ static BOOL MSApplySteady30(NSMutableString *txt) {
             ch |= MSTextSetRaw(txt, @"DRS_MinResolution", @"50", NULL);
             MSRestoreDRSRange();
             [u setBool:YES forKey:@"CyPortDRSReverted"]; [u removeObjectForKey:@"CyPortSteady30v2"];
-            MSLogf(@"steady 30: dynamic resolution switched back off, MetalFX Performance (measured faster)");
+            MSLogf(@"ultra performance: off, fixed MetalFX Performance (50 %%)");
         }
         return ch;
     }
     MSPatchDRSRange();
     NSString *up = nil; MSTextSetOption(txt, @"ResolutionScaling", nil, -1, &up);
-    if (![up isEqualToString:@"FSR2"]) { MSLogf(@"steady 30: upscaler is %@, not MetalFX - left alone", up); return NO; }
+    if (![up isEqualToString:@"FSR2"]) {
+        MSTextSetOption(txt, @"ResolutionScaling", @"FSR2", 1, NULL);
+    }
     int lo = (int)MSCfgD(@"DRSMin", 35), hi = (int)MSCfgD(@"DRSMax", 50); lo = MAX(34, MIN(lo, 100)); hi = MAX(lo, MIN(hi, 100));   /* MetalFX: input >= 1/3 of output */
     NSUserDefaults *u = NSUserDefaults.standardUserDefaults; BOOL ch = NO;
-    if (![u boolForKey:@"CyPortSteady30v2"]) {
+    if (![u boolForKey:@"CyPortSteady30v2"] || [u boolForKey:@"CyPortDRSReverted"]) {
         ch |= MSTextSetRaw(txt, @"DynamicResolutionScaling", @"true", NULL);
         NSString *q = nil; MSTextSetOption(txt, @"MetalFX", nil, -1, &q);
-        if (![q isEqualToString:@"Dynamic"]) { MSTextSetOption(txt, @"MetalFX", @"Dynamic", 5, NULL); ch = YES; }
+        if (![q isEqualToString:@"Dynamic"]) { MSTextSetOption(txt, @"MetalFX", @"Dynamic", 4, NULL); ch = YES; }
         ch |= MSTextSetRaw(txt, @"DRS_TargetFPS", @"30", NULL);
         ch |= MSTextSetRaw(txt, @"DRS_MaxResolution", [NSString stringWithFormat:@"%d", hi], NULL);
         ch |= MSTextSetRaw(txt, @"DRS_MinResolution", [NSString stringWithFormat:@"%d", lo], NULL);
         [u setBool:YES forKey:@"CyPortSteady30v2"];
-        MSLogf(@"steady 30: MetalFX dynamic resolution on, target 30 FPS, %d-%d %%", lo, hi);
+        [u removeObjectForKey:@"CyPortDRSReverted"];
+        MSLogf(@"ultra performance: MetalFX dynamic resolution active, target 30 FPS, %d-%d %% (options.json limit %d %%)", lo, hi, (int)MSCfgD(@"DRSMinLimit", 25));
     } else {                                                   /* the game clamps to its old 50 % limit when it saves */
         NSString *on = nil, *mn = nil; MSTextSetRaw(txt, @"DynamicResolutionScaling", nil, &on); MSTextSetRaw(txt, @"DRS_MinResolution", nil, &mn);
         if ([on isEqualToString:@"true"] && mn.intValue >= 50 && lo < 50) ch |= MSTextSetRaw(txt, @"DRS_MinResolution", [NSString stringWithFormat:@"%d", lo], NULL);
-        MSLogf(@"steady 30: dynamic resolution %@, min %@ %%", [on isEqualToString:@"true"] ? @"on" : @"off (player's choice)", ch ? @(lo) : mn);
+        MSLogf(@"ultra performance: dynamic resolution %@, min %@ %%", [on isEqualToString:@"true"] ? @"on" : @"off (player's choice)", ch ? @(lo) : mn);
     }
     return ch;
 }
@@ -1697,6 +1788,7 @@ static void MSApplyGameSettings(NSSet *keys) {
         }
         [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortUpscalerNamesFixed"];
     }
+    if (MSApplyMobileUI(txt)) changed = YES;
     if (MSApplyFrameRate(txt)) changed = YES;
     if (MSApplySteady30(txt)) changed = YES;
     if (changed && [txt writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])

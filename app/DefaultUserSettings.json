@@ -190,7 +190,7 @@
                 {
                     "name": "HudScaling",
                     "type": "bool",
-                    "value": false,
+                    "value": true,
                     "default_value": false
                 },
                 {
@@ -214,7 +214,7 @@
                 {
                     "name": "BigFont",
                     "type": "bool",
-                    "value": false,
+                    "value": true,
                     "default_value": false
                 },
                 {
@@ -452,8 +452,8 @@
                     "name": "MetalFX",
                     "type": "string_list",
                     "is_dynamic": false,
-                    "value": "Performance",
-                    "index": 3,
+                    "value": "Dynamic",
+                    "index": 4,
                     "default_index": 4,
                     "values": [
                         "Auto",
@@ -515,7 +515,7 @@
                 {
                     "name": "DynamicResolutionScaling",
                     "type": "bool",
-                    "value": false,
+                    "value": true,
                     "default_value": false
                 },
                 {
@@ -530,7 +530,7 @@
                 {
                     "name": "DRS_MinResolution",
                     "type": "int",
-                    "value": 50,
+                    "value": 35,
                     "default_value": 50,
                     "min_value": 50,
                     "max_value": 100,
@@ -539,7 +539,7 @@
                 {
                     "name": "DRS_MaxResolution",
                     "type": "int",
-                    "value": 65,
+                    "value": 50,
                     "default_value": 65,
                     "min_value": 50,
                     "max_value": 100,
@@ -1505,7 +1505,7 @@
                 {
                     "name": "HudScaling",
                     "type": "int",
-                    "value": 100,
+                    "value": 125,
                     "default_value": 100,
                     "min_value": 0,
                     "max_value": 125,
@@ -2319,7 +2319,7 @@
                 {
                     "name": "Radio",
                     "type": "bool",
-                    "value": false,
+                    "value": true,
                     "default_value": false
                 },
                 {
@@ -2332,8 +2332,8 @@
                     "name": "TextSize",
                     "type": "int_list",
                     "is_dynamic": false,
-                    "value": 52,
-                    "index": 2,
+                    "value": 62,
+                    "index": 5,
                     "default_index": 2,
                     "values": [
                         32,
@@ -2360,8 +2360,8 @@
                     "name": "ChattersTextSize",
                     "type": "int_list",
                     "is_dynamic": false,
-                    "value": 32,
-                    "index": 0,
+                    "value": 62,
+                    "index": 4,
                     "default_index": 0,
                     "values": [
                         32,
@@ -2374,7 +2374,7 @@
                 {
                     "name": "BackgroundOpacity",
                     "type": "float",
-                    "value": 30.0,
+                    "value": 100.0,
                     "default_value": 30.0,
                     "min_value": 0.0,
                     "max_value": 100.0,
