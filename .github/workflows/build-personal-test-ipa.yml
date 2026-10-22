@@ -90,12 +90,12 @@ jobs:
             "$APP"
           codesign --verify --deep --strict "$APP"
 
-          (cd "$PACKAGE" && zip -qry "$RUNNER_TEMP/CyPort-personal-test.ipa" Payload)
+          (cd "$PACKAGE" && zip -qry "$RUNNER_TEMP/com.example.cyport.ipa" Payload)
 
       - name: Publish IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: CyPort-personal-test-ipa
-          path: ${{ runner.temp }}/CyPort-personal-test.ipa
+          path: ${{ runner.temp }}/com.example.cyport.ipa
           if-no-files-found: error
           retention-days: 3
