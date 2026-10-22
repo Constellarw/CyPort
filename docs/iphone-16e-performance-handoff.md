@@ -17,6 +17,7 @@ Commits recentes:
 - `b1ab126` adiciona workflow de teste pessoal, inicialmente no fork CyPort.
 - `2acab98` corrige a declaração de `g_realPad`, encontrada pela primeira compilação do workflow.
 - `360d053` escolhe resolução fallback de 1,25x para telas de 60 Hz e mantém 1,5x em ProMotion; atualiza o rótulo `recommended`.
+- `0309454` ativa Ultra Performance (DRS 35-50% para segurar 30 FPS em áreas abertas) e injeta alta visibilidade de UI móvel (BigFont=true, HudScaling=125%, legendas 62 pt com fundo 100% opaco).
 
 A correção de atraso do controle físico drena a fila principal por frame quando `g_realPad` está conectado. A declaração de `g_realPad` foi movida para o bloco de globais para compilar no runner iOS.
 
@@ -33,12 +34,12 @@ O workflow no `cyipa`:
 
 A Action está na `main` do `cyipa`. Inputs padrão: branch `personal/physical-controller-input-latency`, tag `ipa-base-v1`, asset `CyPort-unsigned.ipa`. Não é necessário PAT cross-repo.
 
-Última execução bem-sucedida, com retarget de pools aplicado:
-https://github.com/Constellarw/cyipa/actions/runs/39852796186
+Última execução bem-sucedida, com retarget de pools, Ultra Performance e melhorias de HUD aplicadas:
+https://github.com/Constellarw/cyipa/actions/runs/39866437846
 
-Artifact: `CyPort-personal-test-ipa`, aproximadamente 62.6 MB. O log confirmou:
-`pool-end patch: add x1,x0,x19 -> nop at 0x100017b14, 0x100017b88`
-Os pool-size patches já apareciam como `already patched` na IPA base.
+Artifact: `CyPort-personal-test-ipa` (ID `12463299207`), aproximadamente 62.6 MB.
+Build anterior (apenas retarget de pools):
+https://github.com/Constellarw/cyipa/actions/runs/39852796186
 
 ## Evidência dos logs enviados pelo usuário
 Os arquivos locais `app/macshim.log` e `app/game_output.log` foram adicionados ao workspace e estão untracked. **Não os adicione/commite**: contêm caminhos privados e identificadores de sessão/conta.
