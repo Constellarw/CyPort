@@ -1,0 +1,101 @@
+name: Build personal test IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_repository:
+        description: Private repository containing the base IPA release (owner/repo)
+        required: true
+        type: string
+      ipa_release_tag:
+        description: Release tag containing the base IPA
+        required: true
+        type: string
+      ipa_asset_name:
+        description: Exact IPA asset filename
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download private base IPA
+        env:
+          GH_TOKEN: ${{ secrets.CYPORT_IPA_READ_TOKEN }}
+          IPA_REPOSITORY: ${{ inputs.ipa_repository }}
+          IPA_RELEASE_TAG: ${{ inputs.ipa_release_tag }}
+          IPA_ASSET_NAME: ${{ inputs.ipa_asset_name }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "Add CYPORT_IPA_READ_TOKEN as a repository secret. It needs read access to the private IPA repository." >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/base"
+          gh release download "$IPA_RELEASE_TAG" \
+            --repo "$IPA_REPOSITORY" \
+            --pattern "$IPA_ASSET_NAME" \
+            --dir "$RUNNER_TEMP/base"
+          test -f "$RUNNER_TEMP/base/$IPA_ASSET_NAME"
+          echo "BASE_IPA=$RUNNER_TEMP/base/$IPA_ASSET_NAME" >> "$GITHUB_ENV"
+
+      - name: Compile MacShim for iOS
+        run: |
+          set -euo pipefail
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          SWIFTC="$(xcrun -f swiftc)"
+          TOOLCHAIN="$(dirname "$(dirname "$SWIFTC")")"
+          SWIFT_OBJECT="$RUNNER_TEMP/Launcher.o"
+
+          "$SWIFTC" -target arm64-apple-ios16.0 -sdk "$SDK" -O -parse-as-library \
+            -emit-object -module-name MacShimUI -wmo \
+            shim/Launcher.swift shim/StoresCore.swift shim/StoresUI.swift shim/GameCloud.swift \
+            -o "$SWIFT_OBJECT"
+
+          clang -target arm64-apple-ios16.0 -isysroot "$SDK" -dynamiclib -fobjc-arc -O2 \
+            -L"$SDK/usr/lib/swift" -L"$TOOLCHAIN/lib/swift/iphoneos" \
+            -Xlinker -rpath -Xlinker /usr/lib/swift \
+            -install_name @rpath/libMacShim.dylib \
+            -compatibility_version 9999.0.0 -current_version 9999.0.0 \
+            -framework Foundation -framework UIKit -framework GameController -framework QuartzCore \
+            -framework Security -framework CoreGraphics -framework CoreFoundation -framework Metal \
+            -framework UniformTypeIdentifiers -framework WebKit -lz \
+            -Wl,-reexport_framework,Foundation -Wl,-reexport_framework,CoreGraphics \
+            -Wl,-reexport_framework,Security -Wl,-reexport_framework,Metal \
+            shim/MacShim.m shim/MacShimC.c shim/StoreCodecs.c shim/third_party/lzma/LzmaDec.c \
+            "$SWIFT_OBJECT" -o "$RUNNER_TEMP/libMacShim.dylib"
+
+      - name: Replace shim and package unsigned IPA
+        run: |
+          set -euo pipefail
+          PACKAGE="$RUNNER_TEMP/package"
+          APP="$PACKAGE/Payload/Cyberpunk2077.app"
+          mkdir -p "$PACKAGE"
+          unzip -q "$BASE_IPA" -d "$PACKAGE"
+          test -f "$APP/Frameworks/libMacShim.dylib"
+          cp "$RUNNER_TEMP/libMacShim.dylib" "$APP/Frameworks/libMacShim.dylib"
+
+          for library in "$APP"/Frameworks/*.dylib; do
+            codesign --force --sign - "$library"
+          done
+          codesign --force --sign - \
+            --entitlements app/entitlements-sideload.plist \
+            "$APP"
+          codesign --verify --deep --strict "$APP"
+
+          (cd "$PACKAGE" && zip -qry "$RUNNER_TEMP/CyPort-personal-test.ipa" Payload)
+
+      - name: Publish IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyPort-personal-test-ipa
+          path: ${{ runner.temp }}/CyPort-personal-test.ipa
+          if-no-files-found: error
+          retention-days: 3
