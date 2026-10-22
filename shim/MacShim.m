@@ -957,7 +957,9 @@ static BOOL MSCalledFromGameMain(void *ret);
         }
         MSInputReport();
         double now = CACurrentMediaTime();
-        if (g_mqAsked > g_mqBeat && now - g_mqAsked > 0.25) {         /* main queue starved: run its blocks here */
+        if (g_realPad) {
+            _dispatch_main_queue_callback_4CF(NULL);                 /* GameController input handlers are queued here; run them once per frame */
+        } else if (g_mqAsked > g_mqBeat && now - g_mqAsked > 0.25) {  /* main queue starved: run its blocks here */
             static int n; if (n++ < 3) MSLogf(@"main dispatch queue not serviced for %.1f s - draining it from the game loop", now - g_mqAsked);
             _dispatch_main_queue_callback_4CF(NULL);
         }
