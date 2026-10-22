@@ -1438,12 +1438,15 @@ static int MSCallOnStack(void *top, void *gameMain) { return MSSwitchStack(gameM
  * the game's own DRS (it renders at 50-65 % of the resolution while on). Choices are kept in NSUserDefaults. */
 static const double g_modeScales[] = { 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3 };
 #define MS_NMODES 8
-#define MS_DEFAULT_MODE 3                                  /* 1.5x = 1434x660 on a 16 Pro Max (first run: low settings) */
+static int MSDefaultMode(void) {
+    double maxFPS = 60; MacShimScreenInfo(NULL, NULL, NULL, &maxFPS);
+    return maxFPS <= 60 ? 2 : 3;                           /* 1.25x on 60 Hz phones; 1.5x on ProMotion */
+}
 int MacShimModeCount(void) { return MS_NMODES; }
 double MacShimModeScale(int i) { return i >= 0 && i < MS_NMODES ? g_modeScales[i] : 1; }
 int MacShimCurrentMode(void) {
     NSNumber *n = MSConfig()[@"ResMode"] ?: [NSUserDefaults.standardUserDefaults objectForKey:@"MacShimResMode2"];   /* plist override for tests */
-    int i = n ? n.intValue : MS_DEFAULT_MODE; return i >= 0 && i < MS_NMODES ? i : MS_DEFAULT_MODE;
+    int fallback = MSDefaultMode(), i = n ? n.intValue : fallback; return i >= 0 && i < MS_NMODES ? i : fallback;
 }
 static NSString *MSModeName(int i) {
     double w, h; MacShimScreenInfo(&w, &h, 0, 0);
@@ -1714,7 +1717,9 @@ static NSDictionary *MSRestartSettingsSnapshot(void); static void MSSyncStartScr
 }
 - (void)msBuildResMenu {
     NSMutableArray *acts = [NSMutableArray array]; int cur = MacShimCurrentMode();
-    NSArray *notes = @[ @"fastest", @"", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"native, very hot" ];
+    NSArray *notes = g_fps <= 60
+        ? @[ @"fastest", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"very hot", @"native, very hot" ]
+        : @[ @"fastest", @"", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"native, very hot" ];
     for (int i = MacShimModeCount() - 1; i >= 0; i--) {
         NSString *t = [MSModeName(i) stringByReplacingOccurrencesOfString:@"x" withString:@" × "];
         if ([notes[i] length]) t = [t stringByAppendingFormat:@"  (%@)", notes[i]];

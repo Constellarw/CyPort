@@ -112,7 +112,7 @@ while loading. If it is killed with no crash log, the memory limit is still the 
 
 ### Start screen
 - **Resolution** – the size the game renders and outputs at: 717 × 330 … 2868 × 1320 (native) on an iPhone 16 Pro Max.
-  1434 × 660 is a good start; the higher ones are marked because they make the phone hot quickly. All other graphics options,
+  60 Hz iPhones start at 1.25× to reduce GPU load; ProMotion iPhones start at 1.5×. Higher resolutions are marked because they make the phone hot quickly. All other graphics options,
   including the frame rate (VSync / Maximum FPS), are set in the game's own **Settings** menu and are kept between launches.
 - **Performance overlay** – Off / FPS / Detailed (FPS, frame time, CPU, RAM; *Detailed* also turns on Apple's Metal HUD).
   The system Metal HUD (Settings → Developer → Graphics HUD) is independent of this.
@@ -145,7 +145,7 @@ while loading. If it is killed with no crash log, the memory limit is still the 
 - Going to the Home Screen freezes the game (no sound, no CPU use); opening the app again continues, if iOS kept it in memory.
 
 ### Performance tips
-- **Resolution 1434 × 660** on the start screen. Every step up costs GPU time, and GPU heat adds to the CPU's: at 1912 × 880 an
+- **Resolution:** on 60 Hz iPhones (including iPhone 16e), start at 1.25×; on ProMotion iPhones, 1.5× is a good start. Every step up costs GPU time, and GPU heat adds to the CPU's: at 1912 × 880 an
   iPhone 16 Pro Max throttles within about 1.5 minutes of driving.
 - **Frame rate:** the game's *VSync* setting is its frame cap: 30 / 40 / 60 / 120 / Off. On a 120 Hz iPhone CyPort switches the
   screen to 120 Hz whenever the cap needs it (40, 120, Off – iOS would otherwise stay at 60 Hz and 40 would show as 30). Higher
