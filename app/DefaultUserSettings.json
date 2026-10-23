@@ -1436,7 +1436,7 @@
                     "name": "Resolution",
                     "type": "string_list",
                     "is_dynamic": true,
-                    "value": "1434x660",
+                    "value": "1120x518",
                     "index": 0
                 },
                 {

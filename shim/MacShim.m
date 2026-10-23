@@ -1436,11 +1436,11 @@ static int MSCallOnStack(void *top, void *gameMain) { return MSSwitchStack(gameM
  * The game no longer starts by itself: this screen comes first. Resolution = render size offered to the game as the
  * display mode (screen size x 1, 1.5, 2 or 3 = native) and written into its UserSettings.json; dynamic resolution is
  * the game's own DRS (it renders at 50-65 % of the resolution while on). Choices are kept in NSUserDefaults. */
-static const double g_modeScales[] = { 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3 };
-#define MS_NMODES 8
+static const double g_modeScales[] = { 0.75, 1, 1.25, 1120.0 / 844.0, 1.5, 1.75, 2, 2.5, 3 };
+#define MS_NMODES 9
 static int MSDefaultMode(void) {
     double maxFPS = 60; MacShimScreenInfo(NULL, NULL, NULL, &maxFPS);
-    return maxFPS <= 60 ? 2 : 3;                           /* 1.25x on 60 Hz phones; 1.5x on ProMotion */
+    return maxFPS <= 60 ? 3 : 4;                           /* 1120x on 60 Hz phones; 1.5x on ProMotion */
 }
 int MacShimModeCount(void) { return MS_NMODES; }
 double MacShimModeScale(int i) { return i >= 0 && i < MS_NMODES ? g_modeScales[i] : 1; }
@@ -1568,7 +1568,9 @@ static void MSWriteStreamingIni(void) {
     NSString *old = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
     if (old && ![old hasPrefix:mark]) { MSLogf(@"streaming: %@ is the user's own - left alone", p.lastPathComponent); return; }
     if ([MSConfig()[@"StreamingTweaks"] isEqual:@NO]) { if (old) [NSFileManager.defaultManager removeItemAtPath:p error:nil]; MSLogf(@"streaming: engine defaults (StreamingTweaks = NO)"); return; }
-    double ms = MSCfgD(@"StreamingMsPerFrame", 6); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", 200);
+    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 6.0;
+    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 140 : 200;
+    double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
                      "; engine defaults 12 ms / 300 nodes per frame; spread over more frames for steadier FPS in the open world\n"
                      "[Streaming]\nTimeLimitStreamedPerFrame = %.1f\nMaxNodesPerFrame = %ld\n", mark, ms, nodes];
@@ -1675,6 +1677,10 @@ static void MSApplyGameSettings(NSSet *keys) {
     }
     if (!txt) { MSLogf(@"start screen: no UserSettings.json yet (the game starts in %@)", MSModeName(MacShimCurrentMode())); return; }
     NSUInteger unesc = [txt replaceOccurrencesOfString:@"\\/" withString:@"/" options:0 range:NSMakeRange(0, txt.length)];  /* undo the old escaping */
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortRes1120v1"] && UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) {
+        [NSUserDefaults.standardUserDefaults setInteger:3 forKey:@"MacShimResMode2"];
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortRes1120v1"];
+    }
     NSString *want = MSModeName(MacShimCurrentMode()); BOOL changed = unesc > 0 || firstChanged;
     NSRange nr = [txt rangeOfString:@"\"name\"\\s*:\\s*\"Resolution\"" options:NSRegularExpressionSearch];
     if (nr.location != NSNotFound) {
@@ -1732,8 +1738,8 @@ static NSDictionary *MSRestartSettingsSnapshot(void); static void MSSyncStartScr
 - (void)msBuildResMenu {
     NSMutableArray *acts = [NSMutableArray array]; int cur = MacShimCurrentMode();
     NSArray *notes = g_fps <= 60
-        ? @[ @"fastest", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"very hot", @"native, very hot" ]
-        : @[ @"fastest", @"", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"native, very hot" ];
+        ? @[ @"fastest", @"", @"cool", @"balanced (1120p)", @"sharper, warmer", @"gets hot", @"very hot", @"very hot", @"native, very hot" ]
+        : @[ @"fastest", @"", @"", @"cool", @"balanced (1120p)", @"sharper, warmer", @"gets hot", @"very hot", @"native, very hot" ];
     for (int i = MacShimModeCount() - 1; i >= 0; i--) {
         NSString *t = [MSModeName(i) stringByReplacingOccurrencesOfString:@"x" withString:@" × "];
         if ([notes[i] length]) t = [t stringByAppendingFormat:@"  (%@)", notes[i]];
@@ -1917,7 +1923,7 @@ static void MSWatchGameSettings(void) {
     Class sw = NSClassFromString(@"MSSwiftLauncher"); UIViewController *svc = nil;
     if (sw) {
         NSMutableArray *names = [NSMutableArray array], *notes = [NSMutableArray array];
-        NSArray *n8 = @[ @"fastest", @"", @"", @"recommended", @"sharper, warmer", @"gets hot", @"very hot", @"native, very hot" ];
+        NSArray *n8 = @[ @"fastest", @"", @"cool", @"balanced (1120p)", @"sharper, warmer", @"gets hot", @"very hot", @"very hot", @"native, very hot" ];
         for (int i = 0; i < MacShimModeCount(); i++) { [names addObject:[MSModeName(i) stringByReplacingOccurrencesOfString:@"x" withString:@" × "]]; [notes addObject:i < (int)n8.count ? n8[i] : @""]; }
         void (^onPlay)(NSInteger, NSInteger) = ^(NSInteger res, NSInteger ov) {
             [NSUserDefaults.standardUserDefaults setInteger:res forKey:@"MacShimResMode2"];
@@ -2393,10 +2399,11 @@ static void *MSMmapOld(void *addr, size_t len, int prot, int flags, int fd, off_
         if (t != MAP_FAILED) return t;
         errno = ENOMEM;
     } else if (r == MAP_FAILED && errno == ENOMEM && !addr && (flags & MAP_ANON) && !(flags & MAP_FIXED) && g_nregions < MS_MAX_REGIONS
-               && MSCfgD(@"FallbackRealGB", 0.5) > 0) {
+               && MSCfgD(@"FallbackRealGB", (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 0.25 : 0.5) > 0) {
         /* experimental: no top slot left. Back a smaller part and leave a PROT_NONE guard behind it. The pool's
            address range can now overlap later mappings, so this may misattribute frees. */
-        size_t initial = (size_t)(MSCfgD(@"FallbackRealGB", 0.5) * 1073741824.0) & ~(size_t)0xfffff;
+        double defFallback = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 0.25 : 0.5;
+        size_t initial = (size_t)(MSCfgD(@"FallbackRealGB", defFallback) * 1073741824.0) & ~(size_t)0xfffff;
         if (initial > len) initial = len;
         for (size_t real = initial; real >= ((size_t)32 << 20); real = (real / 2) & ~(size_t)0xfffff) {
             size_t guard = real >= ((size_t)256 << 20) ? ((size_t)64 << 20) : ((size_t)16 << 20);
