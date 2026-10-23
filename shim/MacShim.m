@@ -2189,8 +2189,9 @@ int ms_sched_yield(void) {
  * the unbacked rest of its range lies above the highest mappable address, where no other pointer can ever be.
  * The pools are bump allocators that only touch what they hand out; munmap/madvise/mprotect are clipped to what
  * is really mapped. Tunable in macshim.plist: TopRealGB. */
-typedef struct { uintptr_t base, real, asked; } MSRegion;
-static MSRegion g_regions[8]; static int g_nregions; static os_unfair_lock g_reglock = OS_UNFAIR_LOCK_INIT;
+typedef struct { uintptr_t base; size_t real; size_t asked; size_t mapped; } MSRegion;
+#define MS_MAX_REGIONS 64
+static MSRegion g_regions[MS_MAX_REGIONS]; static int g_nregions; static os_unfair_lock g_reglock = OS_UNFAIR_LOCK_INIT;
 static NSString *MSCallerStr(void *ra) {      /* "image@0xaddr" with the image's unslid vmaddr, so it matches otool/objdump */
     Dl_info i; if (!dladdr(ra, &i)) return [NSString stringWithFormat:@"%p", ra];
     const char *n = strrchr(i.dli_fname, '/'); intptr_t slide = 0;
@@ -2228,7 +2229,7 @@ static void *MSPlaceAtTop(size_t len, int prot, int flags) {
     if (real > free_) real = free_;
     void *hint = (void *)(top - real), *p = kmmap(hint, real, prot, flags & ~MAP_FIXED, -1, 0);
     if (p != hint) { if (p != MAP_FAILED) kmunmap(p, real); MSLogf(@"top placement failed (wanted %p, got %p)", hint, p); return MAP_FAILED; }
-    os_unfair_lock_lock(&g_reglock); g_regions[g_nregions++] = (MSRegion){ (uintptr_t)p, real, len }; os_unfair_lock_unlock(&g_reglock);
+    os_unfair_lock_lock(&g_reglock); if (g_nregions < MS_MAX_REGIONS) g_regions[g_nregions++] = (MSRegion){ (uintptr_t)p, real, len, real }; os_unfair_lock_unlock(&g_reglock);
     MSLogf(@"reservation of %.2f GB does not fit (largest free %.2f GB): placed at top of address space %p, %.2f GB backed, rest above the VA limit",
            len / 1073741824.0, free_ / 1073741824.0, p, real / 1073741824.0);
     return p;
@@ -2376,19 +2377,25 @@ static void *MSMmapOld(void *addr, size_t len, int prot, int flags, int fd, off_
         void *t = MSPlaceAtTop(len, prot, flags);
         if (t != MAP_FAILED) return t;
         errno = ENOMEM;
-    } else if (r == MAP_FAILED && errno == ENOMEM && !addr && (flags & MAP_ANON) && !(flags & MAP_FIXED) && g_nregions < 8
+    } else if (r == MAP_FAILED && errno == ENOMEM && !addr && (flags & MAP_ANON) && !(flags & MAP_FIXED) && g_nregions < MS_MAX_REGIONS
                && MSCfgD(@"FallbackRealGB", 0.5) > 0) {
         /* experimental: no top slot left. Back a smaller part and leave a PROT_NONE guard behind it. The pool's
            address range can now overlap later mappings, so this may misattribute frees. */
-        size_t real = (size_t)(MSCfgD(@"FallbackRealGB", 0.5) * 1073741824.0) & ~(size_t)0xfffff, guard = (size_t)64 << 20;
-        if (real < len) {
-            void *p = kmmap(NULL, real + guard, PROT_NONE, flags, -1, 0);
-            if (p != MAP_FAILED && (prot == PROT_NONE || kmprotect(p, real, prot) == 0)) {
-                os_unfair_lock_lock(&g_reglock); g_regions[g_nregions++] = (MSRegion){ (uintptr_t)p, real, len }; os_unfair_lock_unlock(&g_reglock);
-                MSLogf(@"FALLBACK: reservation of %.2f GB shrunk to %.2f GB + guard at %p (from %@)", len / 1073741824.0, real / 1073741824.0, p, MSBacktraceStr(4));
-                return p;
+        size_t initial = (size_t)(MSCfgD(@"FallbackRealGB", 0.5) * 1073741824.0) & ~(size_t)0xfffff;
+        if (initial > len) initial = len;
+        for (size_t real = initial; real >= ((size_t)32 << 20); real = (real / 2) & ~(size_t)0xfffff) {
+            size_t guard = real >= ((size_t)256 << 20) ? ((size_t)64 << 20) : ((size_t)16 << 20);
+            if (real < len) {
+                void *p = kmmap(NULL, real + guard, PROT_NONE, flags, -1, 0);
+                if (p != MAP_FAILED && (prot == PROT_NONE || kmprotect(p, real, prot) == 0)) {
+                    os_unfair_lock_lock(&g_reglock);
+                    if (g_nregions < MS_MAX_REGIONS) g_regions[g_nregions++] = (MSRegion){ (uintptr_t)p, real, len, real + guard };
+                    os_unfair_lock_unlock(&g_reglock);
+                    MSLogf(@"FALLBACK: reservation of %.2f GB shrunk to %.2f MB + guard at %p (from %@)", len / 1073741824.0, real / 1048576.0, p, MSBacktraceStr(4));
+                    return p;
+                }
+                if (p != MAP_FAILED) kmunmap(p, real + guard);
             }
-            if (p != MAP_FAILED) kmunmap(p, real + guard);
         }
         errno = ENOMEM;
     }
@@ -2413,7 +2420,7 @@ int ms_munmap(void *p, size_t len) {
     os_unfair_lock_lock(&g_reglock);
     for (int i = 0; i < g_nregions; i++) if (g_regions[i].base == (uintptr_t)p && len >= g_regions[i].asked) {   /* whole reservation released */
         MSRegion r = g_regions[i]; g_regions[i] = g_regions[--g_nregions]; os_unfair_lock_unlock(&g_reglock);
-        return kmunmap(p, r.real);
+        return kmunmap(p, r.mapped ? r.mapped : r.real);
     }
     os_unfair_lock_unlock(&g_reglock);
     BOOL in; size_t n = MSClip((uintptr_t)p, len, &in); if (in && !n) return 0;
@@ -4552,6 +4559,11 @@ __attribute__((constructor)) static void MSInit(void) {
         MSHookGameWindow();
         [NSApplication sharedApplication];
         MSMainAsync(^{
+            [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidReceiveMemoryWarningNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+                MSLogf(@"MEMORY WARNING: iOS memory pressure detected! Footprint: %.1f MB. Relieving malloc caches.", MSFootprintMB());
+                void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
+                if (pressure_relief) pressure_relief(NULL, 0);
+            }];
             if (GCKeyboard.coalescedKeyboard) MSAttachKeyboard(GCKeyboard.coalescedKeyboard);
             [NSNotificationCenter.defaultCenter addObserverForName:GCKeyboardDidConnectNotification object:nil queue:nil usingBlock:^(NSNotification *n) { MSAttachKeyboard(n.object); }];
             for (GCMouse *m in GCMouse.mice) MSAttachMouse(m);
