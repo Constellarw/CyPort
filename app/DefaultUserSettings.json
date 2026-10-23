@@ -1824,8 +1824,8 @@
                     "name": "DamageDigitsMode",
                     "type": "string_list",
                     "is_dynamic": false,
-                    "value": "UI-Settings-Interface-DamageNumbers-Mode4",
-                    "index": 3,
+                    "value": "UI-Settings-Interface-DamageNumbers-Mode1",
+                    "index": 0,
                     "default_index": 3,
                     "values": [
                         "UI-Settings-Interface-DamageNumbers-Mode1",
@@ -1851,7 +1851,7 @@
                 {
                     "name": "DamageDigitsInterpolation",
                     "type": "bool",
-                    "value": true,
+                    "value": false,
                     "default_value": true
                 },
                 {

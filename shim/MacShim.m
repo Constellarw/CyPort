@@ -1505,7 +1505,10 @@ static _Atomic double g_paceT;                      /* seconds per frame CyPort 
 static int g_paceMode = -1;                         /* 0 game, 1 auto, 30/40/60 fixed */
 static _Atomic int g_paceFPS;                       /* what g_paceT means, for the overlay/log */
 static int MSFrameRateChoice(void) {
-    id c = MSConfig()[@"FrameRate"]; return [c respondsToSelector:@selector(intValue)] ? [c intValue] : 0;
+    id c = MSConfig()[@"FrameRate"];
+    if ([c respondsToSelector:@selector(intValue)] && [c intValue] > 0) return [c intValue];
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) return 30;
+    return 0;
 }
 static void MSPaceSet(int fps, NSString *why) {
     double t = fps > 0 ? 1.0 / fps : 0; if (t == g_paceT) return;
@@ -1665,7 +1668,7 @@ static void MSApplyGameSettings(NSSet *keys) {
        30), which leaves smooth pacing nothing to do. VSync Off (index 0 of the game's runtime list Off/120/60/40/30) and
        Maximum FPS off: smooth pacing then holds the highest even rate the phone keeps up with. Later launches keep
        whatever the player sets in the game. */
-    if (firstRun && txt && MSSmoothOn()) {
+    if (firstRun && txt && MSSmoothOn() && UI_USER_INTERFACE_IDIOM() != UIUserInterfaceIdiomPhone) {
         BOOL a = MSTextSetOption(txt, @"VSync", @"UI-Settings-Video-QualitySetting-Off", 0, NULL);
         BOOL b = MSTextSetRaw(txt, @"MaximumFPS_OnOff", @"false", NULL);
         if (a || b) { firstChanged = YES; MSLogf(@"first run: VSync Off, Maximum FPS off - smooth frame pacing picks the frame rate"); }
@@ -1699,6 +1702,17 @@ static void MSApplyGameSettings(NSSet *keys) {
     }
     if (MSApplyFrameRate(txt)) changed = YES;
     if (MSApplySteady30(txt)) changed = YES;
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortCombatOptv1"]) {
+        MSTextSetOption(txt, @"DamageDigitsMode", @"UI-Settings-Interface-DamageNumbers-Mode1", 0, NULL);
+        MSTextSetRaw(txt, @"DamageDigitsInterpolation", @"false", NULL);
+        MSTextSetRaw(txt, @"SlowHDD", @"true", NULL);
+        MSTextSetOption(txt, @"HDDMode", @"On", 1, NULL);
+        MSTextSetOption(txt, @"AutosaveInterval", @"Every 10 minutes", 1, NULL);
+        MSTextSetOption(txt, @"CrowdDensity", @"Low", 0, NULL);
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortCombatOptv1"];
+        changed = YES;
+        MSLogf(@"combat optimizations applied to UserSettings.json: DamageNumbers Off, DamageInterpolation off, SlowHDD On, HDDMode On");
+    }
     if (changed && [txt writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
         MSLogf(@"start screen: resolution %@ (text edit%@)", want, unesc ? [NSString stringWithFormat:@", %lu escaped slashes repaired", (unsigned long)unesc] : @"");
 }
@@ -1975,6 +1989,7 @@ int ms_NSGetExecutablePath(char *buf, uint32_t *size) {
     return 0;
 }
 
+static int MSCPUCount(void);
 int ms_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) __asm("_sysctlbyname");
 int ms_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
     NSDictionary *c = MSConfig(); const char *fake = NULL;
@@ -1987,7 +2002,7 @@ int ms_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, s
         static int said; if (!said++) MSLogf(@"sysctl hw.memsize -> %.0f GB (MemSizeGB)", memGB);
         return 0;
     }
-    int cpus = [c[@"CPUCount"] intValue];
+    int cpus = MSCPUCount();
     if (cpus > 0 && !newp && oldp && oldlenp && *oldlenp >= sizeof(int) &&
         (!strcmp(name, "hw.ncpu") || !strcmp(name, "hw.physicalcpu") || !strcmp(name, "hw.logicalcpu") || !strcmp(name, "hw.activecpu") ||
          !strcmp(name, "hw.physicalcpu_max") || !strcmp(name, "hw.logicalcpu_max"))) {
@@ -2971,7 +2986,7 @@ static BOOL MSIsHot(void) { return NSProcessInfo.processInfo.thermalState >= NSP
 static void MSStartPerfLab(void) {
     static dispatch_once_t once; dispatch_once(&once, ^{
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{     /* at utility it starved behind the game for minutes */
-        id hb = MSConfig()[@"HotBoost"]; int mode = [hb isEqual:@"test"] ? 1 : [hb boolValue] ? 2 : 0;   /* 0 off (default: tested, no gain), 1 test, 2 always */
+        id hb = MSConfig()[@"HotBoost"]; int mode = [hb isEqual:@"test"] ? 1 : [hb boolValue] ? 2 : (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone ? 2 : 0);   /* 0 off, 1 test, 2 always */
         BOOL prof = [MSConfig()[@"FrameProfiler"] boolValue];          /* opt-in: its sampling causes short hitches */
         double lastProf = 0, lastTest = 0, verdictAt = 0; int profiles = 0, verdict = 0;     /* verdict: 1 boost helps, -1 doesn't */
         for (;;) @autoreleasepool {
@@ -3104,6 +3119,7 @@ static void MSSmoothFrame(double tOut) {                 /* render thread, after
     double gd = g_gameMinDur; int cap = gd > 0 ? (int)lround(1 / gd) : maxHz; if (cap > maxHz) cap = maxHz;
     static const int steps[] = { 120, 60, 40, 30 };
     int newTop = 0; for (int i = 0; i < 4; i++) if (steps[i] <= cap && maxHz % steps[i] == 0) { newTop = steps[i]; break; }
+    if (newTop > 30 && UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) newTop = 30;
     if (newTop != top) {                                  /* game cap changed (or first frame) */
         top = newTop; probing = 0; badWins = 0;
         if (!step || step > top) step = top; else if (step < top) probeAt = tOut + 3;
@@ -4637,7 +4653,16 @@ OSStatus ms_AUGraphStart(AUGraph g) {
 /* ---------------------------------------------------------------- CPU count (CPUCount setting) for sysconf / sysctl /
  * NSProcessInfo, matching sysctlbyname above */
 #include <sys/sysctl.h>
-static int MSCPUCount(void) { static int v = -1; if (v < 0) v = [MSConfig()[@"CPUCount"] intValue]; return v; }
+static int MSCPUCount(void) {
+    static int v = -1;
+    if (v < 0) {
+        id c = MSConfig()[@"CPUCount"];
+        if (c && [c respondsToSelector:@selector(intValue)] && [c intValue] > 0) v = [c intValue];
+        else if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) v = 4;
+        else v = 0;
+    }
+    return v;
+}
 long ms_sysconf(int name) __asm("_sysconf");
 long ms_sysconf(int name) {
     static long (*real)(int); if (!real) real = (long (*)(int))dlsym(RTLD_NEXT, "sysconf");
