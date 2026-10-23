@@ -57,8 +57,6 @@ private struct LauncherView: View {
     @AppStorage("CyPortLowLatency") private var lowLatency = false
     /// read by the shim (MSSmoothOn): hold the game to an even 120/60/40/30 it can keep up with
     @AppStorage("CyPortSmoothPacing") private var smoothPacing = true
-    /// read by the shim (MSUltraPerformanceOn): dynamic 3D resolution down to 35% in heavy areas to hold 30 FPS
-    @AppStorage("CyPortUltraPerformance") private var ultraPerformance = true
 
     /// a 300 pt wide boxed row like the Resolution button; the switch keeps its own size so it is never pushed off the edge
     private func switchRow(_ title: String, icon: String, isOn: Binding<Bool>, note: String) -> some View {
@@ -151,8 +149,6 @@ private struct LauncherView: View {
 
                     switchRow("Smooth frame pacing", icon: "waveform.path", isOn: $smoothPacing,
                               note: smoothPacing ? "Even frame times: holds 120, 60, 40 or 30 FPS, whatever the phone keeps up with." : "Off: the game's own frame cap only.")
-                    switchRow("Ultra Performance", icon: "bolt.fill", isOn: $ultraPerformance,
-                              note: ultraPerformance ? "Modo Ultra Desempenho: 3D dinâmico até 35% em áreas pesadas para manter 30 FPS. HUD e textos ficam nítidos." : "Desligado: modo Desempenho fixo (50%).")
                     switchRow("Low-latency input", icon: "bolt.horizontal", isOn: $lowLatency,
                               note: lowLatency ? "Snappier controls. Costs a few FPS when the GPU is the limit." : "Off: best frame rate.")
 
