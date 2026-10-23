@@ -17,7 +17,7 @@ Commits recentes:
 - `b1ab126` adiciona workflow de teste pessoal, inicialmente no fork CyPort.
 - `2acab98` corrige a declaração de `g_realPad`, encontrada pela primeira compilação do workflow.
 - `360d053` escolhe resolução fallback de 1,25x para telas de 60 Hz e mantém 1,5x em ProMotion; atualiza o rótulo `recommended`.
-- `0309454` ativa Ultra Performance (DRS 35-50% para segurar 30 FPS em áreas abertas) e injeta alta visibilidade de UI móvel (BigFont=true, HudScaling=125%, legendas 62 pt com fundo 100% opaco).
+- `0309454` tentativa de Ultra Performance (DRS 35-50%) e HUD 125%/legendas 62pt (revertido em `df46be6` a pedido do usuário após testes reais no aparelho mostrarem perda excessiva de qualidade visual e invasão de tela).
 
 A correção de atraso do controle físico drena a fila principal por frame quando `g_realPad` está conectado. A declaração de `g_realPad` foi movida para o bloco de globais para compilar no runner iOS.
 
