@@ -34,6 +34,7 @@
 #include <sys/resource.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+#include <malloc/malloc.h>
 
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
@@ -1573,7 +1574,7 @@ static void MSWriteStreamingIni(void) {
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
     double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 12.0 : 6.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
-    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\n" : @"";
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
                      "; sector unload budget 12 ms keeps old world chunks purged behind the vehicle; bounds memory on 8 GB devices\n"
                      "[Streaming]\n"
@@ -1583,7 +1584,13 @@ static void MSWriteStreamingIni(void) {
                      "TimeLimitAttachingPerFrame = %.1f\n"
                      "MaxNodesPerFrame = %ld\n"
                      "DistanceBoost = 0.0\n"
-                     "MinDistanceToTriggerStreaming = 60.0\n%@", mark, ms, ms, unloadMs, ms, nodes, fogBlock];
+                     "MinDistanceToTriggerStreaming = 60.0\n"
+                     "\n"
+                     "[Rendering/Shadows]\n"
+                     "CascadeRange0 = 8.000000\n"
+                     "CascadeRange1 = 20.000000\n"
+                     "CascadeRange2 = 45.000000\n"
+                     "CascadeRange3 = 90.000000\n%@", mark, ms, ms, unloadMs, ms, nodes, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     if (![old isEqualToString:ini]) {
         if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
@@ -1595,7 +1602,7 @@ static void MSWriteStreamingIni(void) {
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
         NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
-        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\n", mark];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
         if (![rOld isEqualToString:rIni]) {
             [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
@@ -3143,7 +3150,7 @@ static void MSLowLatencyLayer(CAMetalLayer *l) {
     static __weak CAMetalLayer *done; if (l == done) return; done = l;
     /* v2: low latency keeps 3 drawables (2 halved the frame rate: 120 -> 60, 60 -> 30) and limits the frames queued for
        the GPU instead (MSLowLatencyWait). Drawables = 2 in macshim.plist still forces the old way. */
-    int want = (int)MSCfgD(@"Drawables", 0); if (want != 2 && want != 3) return;
+    int want = (int)MSCfgD(@"Drawables", (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3 : 0); if (want != 2 && want != 3) return;
     NSUInteger was = l.maximumDrawableCount; if (was != (NSUInteger)want) l.maximumDrawableCount = want;
     MSLogf(@"low latency: game layer %.0fx%.0f, at most %d drawables (was %lu)", l.drawableSize.width, l.drawableSize.height, want, (unsigned long)was);
 }
@@ -4129,10 +4136,16 @@ static void MSStartReadProgress(void) {
                 static double lastRelief = 0;
                 if (now - lastRelief > 5.0) {
                     lastRelief = now;
-                    void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
-                    if (pressure_relief) {
-                        MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieving malloc pressure", mem);
-                        pressure_relief(NULL, 0);
+                    vm_address_t *zones = NULL; unsigned nz = 0;
+                    if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
+                        for (unsigned zi = 0; zi < nz; zi++) malloc_zone_pressure_relief((malloc_zone_t *)zones[zi], 0);
+                        MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieved %u malloc zones", mem, nz);
+                    } else {
+                        void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
+                        if (pressure_relief) {
+                            MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieving default malloc zone", mem);
+                            pressure_relief(NULL, 0);
+                        }
                     }
                 }
             }

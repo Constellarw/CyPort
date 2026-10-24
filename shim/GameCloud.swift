@@ -200,12 +200,23 @@ enum GameCloud {
         // the undone slots: the phone now has the cloud's old copies again, they go back up (not down)
         for slot in undo where lTimes[slot] != nil { pull.removeAll { $0 == slot }; if !push.contains(slot) { push.append(slot) } }
         if !(send && source.canSend) { push = [] }
-        log("\(source.rawValue): \(cloud.count) cloud file(s); get \(pull.sorted()), send \(push.sorted())")
+
+        // Sort by newest cloud modification time first, and limit large pulls to the 3 most recent saves
+        let pullSorted = pull.sorted { (cTimes[$0] ?? .distantPast) > (cTimes[$1] ?? .distantPast) }
+        let maxPull = 3
+        let pullToFetch: [String]
+        if pullSorted.count > maxPull {
+            pullToFetch = Array(pullSorted.prefix(maxPull))
+            log("\(source.rawValue): \(pullSorted.count) saves in cloud; downloading only the \(maxPull) newest to save time: \(pullToFetch)")
+        } else {
+            pullToFetch = pullSorted
+        }
+        log("\(source.rawValue): \(cloud.count) cloud file(s); get \(pullToFetch), send \(push.sorted())")
 
         var r = Result()
         let fm = FileManager.default
-        for (i, slot) in pull.sorted().enumerated() {
-            progress("Getting save \(i + 1) of \(pull.count)…")
+        for (i, slot) in pullToFetch.enumerated() {
+            progress("Getting save \(i + 1) of \(pullToFetch.count)…")
             var got: [(String, Data, Date)] = []
             for f in cloudBySlot[slot] ?? [] { got.append((f.rel, try await f.fetch(), f.modified)) }   // all of the slot before touching the phone's
             try backUp(slot: slot)
