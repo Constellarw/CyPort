@@ -1571,13 +1571,26 @@ static void MSWriteStreamingIni(void) {
     double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 6.0;
     long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 140 : 200;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
+    BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
                      "; engine defaults 12 ms / 300 nodes per frame; spread over more frames for steadier FPS in the open world\n"
-                     "[Streaming]\nTimeLimitStreamedPerFrame = %.1f\nMaxNodesPerFrame = %ld\n", mark, ms, nodes];
-    if ([old isEqualToString:ini]) return;
+                     "[Streaming]\nTimeLimitStreamedPerFrame = %.1f\nMaxNodesPerFrame = %ld\n"
+                     "DistanceBoost = 0.0\nMinDistanceToTriggerStreaming = 60.0\n%@", mark, ms, nodes, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-    if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil]) MSLogf(@"streaming: at most %.1f ms and %ld nodes per frame (user.ini)", ms, nodes);
-    else MSLogf(@"streaming: could not write %@", p);
+    if (![old isEqualToString:ini]) {
+        if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
+            MSLogf(@"streaming: at most %.1f ms and %ld nodes per frame, fog tweaks%@ (user.ini)", ms, nodes, fogTweak ? @" on" : @" off");
+        else MSLogf(@"streaming: could not write %@", p);
+    }
+    if (fogTweak) {
+        NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
+        NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\n", mark];
+        if (![rOld isEqualToString:rIni]) {
+            [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
+    }
 }
 /* ---------------------------------------------------------------- steady 30 (the game's dynamic resolution)
  * Hot, the A18 Pro's GPU slows to ~1/3 of its cool speed: at a fixed MetalFX Performance (50 %) the city then takes
@@ -1718,6 +1731,22 @@ static void MSApplyGameSettings(NSSet *keys) {
         [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortCombatOptv1"];
         changed = YES;
         MSLogf(@"combat optimizations applied to UserSettings.json: DamageNumbers Off, DamageInterpolation off, SlowHDD On, HDDMode On");
+    }
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortPerfModsV1"]) {
+        MSTextSetOption(txt, @"CrowdDensity", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"CascadedShadowsRange", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"CascadedShadowsResolution", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"DistantShadowsResolution", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"VolumetricCloudsQuality", @"Off", 0, NULL);
+        MSTextSetOption(txt, @"VolumetricFogResolution", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"ScreenSpaceReflectionsQuality", @"Off", 0, NULL);
+        MSTextSetOption(txt, @"AmbientOcclusion", @"Off", 0, NULL);
+        MSTextSetOption(txt, @"LocalShadowsQuality", @"Off", 0, NULL);
+        MSTextSetRaw(txt, @"ContactShadows", @"false", NULL);
+        MSTextSetRaw(txt, @"Vignette", @"false", NULL);
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortPerfModsV1"];
+        changed = YES;
+        MSLogf(@"performance mod settings applied to UserSettings.json: Low crowd/shadows, VolumetricFog Low, Vignette false");
     }
     if (changed && [txt writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
         MSLogf(@"start screen: resolution %@ (text edit%@)", want, unesc ? [NSString stringWithFormat:@", %lu escaped slashes repaired", (unsigned long)unesc] : @"");

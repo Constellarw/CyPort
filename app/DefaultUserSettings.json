@@ -2434,7 +2434,7 @@
                 {
                     "name": "Vignette",
                     "type": "bool",
-                    "value": true,
+                    "value": false,
                     "default_value": true
                 }
             ]
