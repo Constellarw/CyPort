@@ -41,7 +41,8 @@ enum CloudSource: String, CaseIterable, Identifiable {
     }
     /// sends these save slots (Epic: a new snapshot of all of them)
     func send(_ slots: [String], cloud: [CloudFile]) async throws {
-        try await GameCloud.backupOnce(self, cloud)
+        let relevant = cloud.filter { c in slots.contains { c.rel.hasPrefix($0 + "/") } }
+        try? await GameCloud.backupOnce(self, relevant)
         let files = GameCloud.localFiles().filter { f in slots.contains { f.rel.hasPrefix($0 + "/") } }
         switch self {
         case .gog: for slot in slots { try await GOGCloud.send(files.filter { $0.rel.hasPrefix(slot + "/") }) }

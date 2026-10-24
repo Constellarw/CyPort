@@ -200,7 +200,7 @@ private struct LauncherView: View {
                     }
 
                     Button {
-                        guard !model.starting, !model.syncing else { return }
+                        guard !model.starting else { return }
                         model.starting = true
                         GameCloud.startWatching()
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
