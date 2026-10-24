@@ -4290,8 +4290,22 @@ static void MSSignal(int sig) {
 }
 static void MSException(NSException *e) { MSLogf(@"*** UNCAUGHT EXCEPTION %@: %@\n%@", e.name, e.reason, e.callStackSymbols); }
 static void MSOpenLog(void) {
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject, *p = [docs stringByAppendingPathComponent:@"macshim.log"];
-    NSDictionary *at = [NSFileManager.defaultManager attributesOfItemAtPath:p error:nil];
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *p = [docs stringByAppendingPathComponent:@"macshim.log"];
+    NSString *prev = [docs stringByAppendingPathComponent:@"macshim.prev.log"];
+    NSString *gp = [docs stringByAppendingPathComponent:@"game_output.log"];
+    NSString *gprev = [docs stringByAppendingPathComponent:@"game_output.prev.log"];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSDictionary *at = [fm attributesOfItemAtPath:p error:nil];
+    if ([at fileSize] > 0) {
+        [fm removeItemAtPath:prev error:nil];
+        [fm copyItemAtPath:p toPath:prev error:nil];
+    }
+    NSDictionary *gat = [fm attributesOfItemAtPath:gp error:nil];
+    if ([gat fileSize] > 0) {
+        [fm removeItemAtPath:gprev error:nil];
+        [fm copyItemAtPath:gp toPath:gprev error:nil];
+    }
     int flags = O_WRONLY | O_CREAT | O_APPEND; if ([at fileSize] > 512 * 1024) flags |= O_TRUNC;
     g_logfd = open(p.fileSystemRepresentation, flags, 0644);
     {   /* the game's own stdout/stderr (engine log lines, asserts) -> Documents/game_output.log */
