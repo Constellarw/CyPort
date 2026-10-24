@@ -2074,7 +2074,7 @@ int ms_pthread_set_qos_class_self_np(qos_class_t q, int rel) {
     char nm[64] = ""; pthread_getname_np(pthread_self(), nm, sizeof nm);
     static int cool = -1;
     if (cool < 0) cool = ![MSConfig()[@"CoolMode"] isEqual:@NO];
-    static int fastW = -1; if (fastW < 0) fastW = (int)MAX(0, MSCfgD(@"CoolFastWorkers", 2));
+    static int fastW = -1; if (fastW < 0) fastW = (int)MAX(0, MSCfgD(@"CoolFastWorkers", (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1 : 2));
     if (cool && !strncmp(nm, "redDispatcher", 13) && q > QOS_CLASS_UTILITY) want = atoi(nm + 13) <= fastW ? QOS_CLASS_USER_INITIATED : QOS_CLASS_UTILITY;
     if (want == QOS_CLASS_UTILITY && !strncmp(nm, "redDispatcher", 13)) { int i = g_slowWorkerN; if (i < 8) { g_slowWorker[i] = pthread_self(); g_slowWorkerN = i + 1; } }
     static _Atomic int n; if (n++ < 40) {
@@ -2194,8 +2194,9 @@ int ms_sched_yield(void) {
     static __thread unsigned run; static __thread uint64_t last;
     uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
     run = now - last > 1000000 ? 1 : run + 1; last = now; g_yields++;
-    if (on && run > 32) {
-        struct timespec ts = { 0, run > 256 ? 100000 : 20000 }; g_yieldSleeps++;
+    unsigned limit = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 16 : 32;
+    if (on && run > limit) {
+        struct timespec ts = { 0, run > (limit * 8) ? 100000 : 20000 }; g_yieldSleeps++;
         nanosleep(&ts, NULL); return 0;
     }
     return real ? real() : 0;
@@ -2993,7 +2994,7 @@ static BOOL MSIsHot(void) { return NSProcessInfo.processInfo.thermalState >= NSP
 static void MSStartPerfLab(void) {
     static dispatch_once_t once; dispatch_once(&once, ^{
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{     /* at utility it starved behind the game for minutes */
-        id hb = MSConfig()[@"HotBoost"]; int mode = [hb isEqual:@"test"] ? 1 : [hb boolValue] ? 2 : (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone ? 2 : 0);   /* 0 off, 1 test, 2 always */
+        id hb = MSConfig()[@"HotBoost"]; int mode = [hb isEqual:@"test"] ? 1 : [hb boolValue] ? 2 : 0;   /* 0 off (keeps workers on low-power efficiency cores), 1 test, 2 always */
         BOOL prof = [MSConfig()[@"FrameProfiler"] boolValue];          /* opt-in: its sampling causes short hitches */
         double lastProf = 0, lastTest = 0, verdictAt = 0; int profiles = 0, verdict = 0;     /* verdict: 1 boost helps, -1 doesn't */
         for (;;) @autoreleasepool {
