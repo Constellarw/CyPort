@@ -1568,20 +1568,29 @@ static void MSWriteStreamingIni(void) {
     NSString *old = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
     if (old && ![old hasPrefix:mark]) { MSLogf(@"streaming: %@ is the user's own - left alone", p.lastPathComponent); return; }
     if ([MSConfig()[@"StreamingTweaks"] isEqual:@NO]) { if (old) [NSFileManager.defaultManager removeItemAtPath:p error:nil]; MSLogf(@"streaming: engine defaults (StreamingTweaks = NO)"); return; }
-    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 6.0;
-    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 140 : 200;
+    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2.5 : 5.0;
+    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 80 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 12.0 : 6.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
     NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
-                     "; engine defaults 12 ms / 300 nodes per frame; spread over more frames for steadier FPS in the open world\n"
-                     "[Streaming]\nTimeLimitStreamedPerFrame = %.1f\nMaxNodesPerFrame = %ld\n"
-                     "DistanceBoost = 0.0\nMinDistanceToTriggerStreaming = 60.0\n%@", mark, ms, nodes, fogBlock];
+                     "; sector unload budget 12 ms keeps old world chunks purged behind the vehicle; bounds memory on 8 GB devices\n"
+                     "[Streaming]\n"
+                     "TimeLimitStreamedPerFrame = %.1f\n"
+                     "TimeLimitSectorLoadPerFrame = %.1f\n"
+                     "TimeLimitSectorUnloadPerFrame = %.1f\n"
+                     "TimeLimitAttachingPerFrame = %.1f\n"
+                     "MaxNodesPerFrame = %ld\n"
+                     "DistanceBoost = 0.0\n"
+                     "MinDistanceToTriggerStreaming = 60.0\n%@", mark, ms, ms, unloadMs, ms, nodes, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     if (![old isEqualToString:ini]) {
         if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
-            MSLogf(@"streaming: at most %.1f ms and %ld nodes per frame, fog tweaks%@ (user.ini)", ms, nodes, fogTweak ? @" on" : @" off");
+            MSLogf(@"streaming: load %.1f ms, unload %.1f ms, %ld nodes per frame, fog tweaks%@ (user.ini updated)", ms, unloadMs, nodes, fogTweak ? @" on" : @" off");
         else MSLogf(@"streaming: could not write %@", p);
+    } else {
+        MSLogf(@"streaming: load %.1f ms, unload %.1f ms, %ld nodes per frame, fog tweaks%@ (user.ini active)", ms, unloadMs, nodes, fogTweak ? @" on" : @" off");
     }
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
@@ -4116,6 +4125,17 @@ static void MSStartReadProgress(void) {
             long long b = g_readBytes, c = g_readCalls, fr = g_frames; double now = CACurrentMediaTime(), idle = g_lastReadAt ? now - g_lastReadAt : now - t0;
             if (tick % 2 == 1) { double cpu = MSCPUSeconds(); cpuPct = (cpu - lastCPU) / (now - lastT) * 100; lastCPU = cpu; lastT = now; }
             double mem = MSFootprintMB();
+            if (mem > 5400) {
+                static double lastRelief = 0;
+                if (now - lastRelief > 5.0) {
+                    lastRelief = now;
+                    void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
+                    if (pressure_relief) {
+                        MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieving malloc pressure", mem);
+                        pressure_relief(NULL, 0);
+                    }
+                }
+            }
             if (tick % 2 == 1) { fps = (fr - frLast) / (now - frT); frLast = fr; frT = now; }
             if (tick % 10 == 9) {
                 mbps = (b - b5) / 5.0 / 1048576.0;
