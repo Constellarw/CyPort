@@ -1569,14 +1569,15 @@ static void MSWriteStreamingIni(void) {
     NSString *old = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
     if (old && ![old hasPrefix:mark]) { MSLogf(@"streaming: %@ is the user's own - left alone", p.lastPathComponent); return; }
     if ([MSConfig()[@"StreamingTweaks"] isEqual:@NO]) { if (old) [NSFileManager.defaultManager removeItemAtPath:p error:nil]; MSLogf(@"streaming: engine defaults (StreamingTweaks = NO)"); return; }
-    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2.5 : 5.0;
-    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 80 : 160;
+    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2.0 : 5.0;
+    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 50 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
-    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 12.0 : 6.0;
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 16.0 : 6.0;
+    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2500.0 : 5000.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
     NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
-                     "; sector unload budget 12 ms keeps old world chunks purged behind the vehicle; bounds memory on 8 GB devices\n"
+                     "; sector unload budget 16 ms keeps old world chunks purged behind the vehicle; bounds memory on 8 GB devices\n"
                      "[Streaming]\n"
                      "TimeLimitStreamedPerFrame = %.1f\n"
                      "TimeLimitSectorLoadPerFrame = %.1f\n"
@@ -1584,13 +1585,17 @@ static void MSWriteStreamingIni(void) {
                      "TimeLimitAttachingPerFrame = %.1f\n"
                      "MaxNodesPerFrame = %ld\n"
                      "DistanceBoost = 0.0\n"
-                     "MinDistanceToTriggerStreaming = 60.0\n"
+                     "MinDistanceToTriggerStreaming = 40.0\n"
+                     "MaxStreamingDistance = %.1f\n"
                      "\n"
                      "[Rendering/Shadows]\n"
                      "CascadeRange0 = 8.000000\n"
-                     "CascadeRange1 = 20.000000\n"
-                     "CascadeRange2 = 45.000000\n"
-                     "CascadeRange3 = 90.000000\n%@", mark, ms, ms, unloadMs, ms, nodes, fogBlock];
+                     "CascadeRange1 = 18.000000\n"
+                     "CascadeRange2 = 40.000000\n"
+                     "CascadeRange3 = 70.000000\n"
+                     "\n"
+                     "[LevelOfDetail]\n"
+                     "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, ms, nodes, maxDist, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     if (![old isEqualToString:ini]) {
         if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
@@ -4132,18 +4137,18 @@ static void MSStartReadProgress(void) {
             long long b = g_readBytes, c = g_readCalls, fr = g_frames; double now = CACurrentMediaTime(), idle = g_lastReadAt ? now - g_lastReadAt : now - t0;
             if (tick % 2 == 1) { double cpu = MSCPUSeconds(); cpuPct = (cpu - lastCPU) / (now - lastT) * 100; lastCPU = cpu; lastT = now; }
             double mem = MSFootprintMB();
-            if (mem > 5400) {
+            if (mem > 4800) {
                 static double lastRelief = 0;
                 if (now - lastRelief > 5.0) {
                     lastRelief = now;
                     vm_address_t *zones = NULL; unsigned nz = 0;
                     if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
                         for (unsigned zi = 0; zi < nz; zi++) malloc_zone_pressure_relief((malloc_zone_t *)zones[zi], 0);
-                        MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieved %u malloc zones", mem, nz);
+                        MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieved %u malloc zones", mem, nz);
                     } else {
                         void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
                         if (pressure_relief) {
-                            MSLogf(@"memory guard: footprint %.0f MB > 5400 MB, relieving default malloc zone", mem);
+                            MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieving default malloc zone", mem);
                             pressure_relief(NULL, 0);
                         }
                     }
