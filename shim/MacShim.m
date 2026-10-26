@@ -1569,24 +1569,29 @@ static void MSWriteStreamingIni(void) {
     NSString *old = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
     if (old && ![old hasPrefix:mark]) { MSLogf(@"streaming: %@ is the user's own - left alone", p.lastPathComponent); return; }
     if ([MSConfig()[@"StreamingTweaks"] isEqual:@NO]) { if (old) [NSFileManager.defaultManager removeItemAtPath:p error:nil]; MSLogf(@"streaming: engine defaults (StreamingTweaks = NO)"); return; }
-    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2.0 : 5.0;
-    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 50 : 160;
+    double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 5.0;
+    long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 75 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
-    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 16.0 : 6.0;
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 4.0 : 6.0;
     double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2500.0 : 5000.0;
+    double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
     NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
-                     "; sector unload budget 16 ms keeps old world chunks purged behind the vehicle; bounds memory on 8 GB devices\n"
+                     "; sector streaming balanced for driving traversal on mobile; velocity predictive offset prevents falling through map\n"
                      "[Streaming]\n"
                      "TimeLimitStreamedPerFrame = %.1f\n"
                      "TimeLimitSectorLoadPerFrame = %.1f\n"
                      "TimeLimitSectorUnloadPerFrame = %.1f\n"
-                     "TimeLimitAttachingPerFrame = %.1f\n"
+                     "TimeLimitAttachingPerFrame = 2.5\n"
                      "MaxNodesPerFrame = %ld\n"
                      "DistanceBoost = 0.0\n"
-                     "MinDistanceToTriggerStreaming = 40.0\n"
+                     "ObserverVelocityOffsetEnabled = true\n"
+                     "ObserverMaxNonAirVehicleForwardVelocity = 35.000000\n"
                      "MaxStreamingDistance = %.1f\n"
+                     "\n"
+                     "[Streaming/Culling/NonAirVehicle]\n"
+                     "MaxStreamingRadius = %.1f\n"
                      "\n"
                      "[Rendering/Shadows]\n"
                      "CascadeRange0 = 8.000000\n"
@@ -1595,7 +1600,7 @@ static void MSWriteStreamingIni(void) {
                      "CascadeRange3 = 70.000000\n"
                      "\n"
                      "[LevelOfDetail]\n"
-                     "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, ms, nodes, maxDist, fogBlock];
+                     "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, nodes, maxDist, vehRadius, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     if (![old isEqualToString:ini]) {
         if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
