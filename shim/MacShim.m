@@ -1572,11 +1572,11 @@ static void MSWriteStreamingIni(void) {
     double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 5.0;
     long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 75 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
-    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 12.0 : 6.0;
-    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1500.0 : 5000.0;
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 10.0 : 6.0;
+    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1800.0 : 5000.0;
     double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
-    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\nScreenSpaceReflection = False\nScreenSpacePlanarReflection = False\nScreenSpaceHeatHaze = False\n" : @"";
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
                      "; sector streaming balanced for traversal on mobile; strict culling and unload budget prevent memory creep\n"
                      "[Streaming]\n"
@@ -1619,7 +1619,7 @@ static void MSWriteStreamingIni(void) {
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
         NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
-        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\nScreenSpaceReflection = False\nScreenSpacePlanarReflection = False\nScreenSpaceHeatHaze = False\n", mark];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
         if (![rOld isEqualToString:rIni]) {
             [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
@@ -4151,8 +4151,7 @@ static void MSStartReadProgress(void) {
             double mem = MSFootprintMB();
             if (mem > 4800) {
                 static double lastRelief = 0;
-                double reliefInterval = (mem > 5200) ? 2.0 : 5.0;
-                if (now - lastRelief > reliefInterval) {
+                if (now - lastRelief > 5.0) {
                     lastRelief = now;
                     vm_address_t *zones = NULL; unsigned nz = 0;
                     if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
@@ -4164,11 +4163,6 @@ static void MSStartReadProgress(void) {
                             MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieving default malloc zone", mem);
                             pressure_relief(NULL, 0);
                         }
-                    }
-                    if (mem > 5200) {
-                        MSMainAsync(^{
-                            [NSNotificationCenter.defaultCenter postNotificationName:UIApplicationDidReceiveMemoryWarningNotification object:UIApplication.sharedApplication];
-                        });
                     }
                 }
             }
