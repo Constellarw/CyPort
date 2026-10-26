@@ -1572,13 +1572,13 @@ static void MSWriteStreamingIni(void) {
     double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 5.0;
     long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 75 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
-    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 4.0 : 6.0;
-    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 2500.0 : 5000.0;
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 10.0 : 6.0;
+    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1800.0 : 5000.0;
     double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
-    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
-                     "; sector streaming balanced for driving traversal on mobile; velocity predictive offset prevents falling through map\n"
+                     "; sector streaming balanced for traversal on mobile; strict culling and unload budget prevent memory creep\n"
                      "[Streaming]\n"
                      "TimeLimitStreamedPerFrame = %.1f\n"
                      "TimeLimitSectorLoadPerFrame = %.1f\n"
@@ -1590,8 +1590,15 @@ static void MSWriteStreamingIni(void) {
                      "ObserverMaxNonAirVehicleForwardVelocity = 35.000000\n"
                      "MaxStreamingDistance = %.1f\n"
                      "\n"
+                     "[Streaming/Culling]\n"
+                     "Strict = true\n"
+                     "AutoHideDistanceNear/Enabled = true\n"
+                     "\n"
                      "[Streaming/Culling/NonAirVehicle]\n"
                      "MaxStreamingRadius = %.1f\n"
+                     "\n"
+                     "[ResourceBank]\n"
+                     "GameResourceCacheExpirySeconds = 10\n"
                      "\n"
                      "[Rendering/Shadows]\n"
                      "CascadeRange0 = 8.000000\n"
@@ -1612,7 +1619,7 @@ static void MSWriteStreamingIni(void) {
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
         NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
-        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
         if (![rOld isEqualToString:rIni]) {
             [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
@@ -4144,7 +4151,8 @@ static void MSStartReadProgress(void) {
             double mem = MSFootprintMB();
             if (mem > 4800) {
                 static double lastRelief = 0;
-                if (now - lastRelief > 5.0) {
+                double reliefInterval = (mem > 5400) ? 2.0 : 5.0;
+                if (now - lastRelief > reliefInterval) {
                     lastRelief = now;
                     vm_address_t *zones = NULL; unsigned nz = 0;
                     if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
@@ -4156,6 +4164,11 @@ static void MSStartReadProgress(void) {
                             MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieving default malloc zone", mem);
                             pressure_relief(NULL, 0);
                         }
+                    }
+                    if (mem > 5400) {
+                        MSMainAsync(^{
+                            [NSNotificationCenter.defaultCenter postNotificationName:UIApplicationDidReceiveMemoryWarningNotification object:UIApplication.sharedApplication];
+                        });
                     }
                 }
             }
