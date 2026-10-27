@@ -1596,6 +1596,12 @@ static void MSWriteStreamingIni(void) {
                      "[ResourceBank]\n"
                      "GameResourceCacheExpirySeconds = 10\n"
                      "\n"
+                     "[Rendering/Shadows]\n"
+                     "CascadeRange0 = 12.000000\n"
+                     "CascadeRange1 = 30.000000\n"
+                     "CascadeRange2 = 75.000000\n"
+                     "CascadeRange3 = 150.000000\n"
+                     "\n"
                      "[LevelOfDetail]\n"
                      "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, nodes, maxDist, vehRadius, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
@@ -1770,6 +1776,15 @@ static void MSApplyGameSettings(NSSet *keys) {
         [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortPerfModsV1"];
         changed = YES;
         MSLogf(@"performance mod settings applied to UserSettings.json: Low crowd/shadows, VolumetricFog Low, Vignette false");
+    }
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortShadowRangeV2"]) {
+        MSTextSetOption(txt, @"CascadedShadowsRange", @"Medium", 1, NULL);
+        MSTextSetOption(txt, @"CascadedShadowsResolution", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"LocalShadowsQuality", @"Low", 1, NULL);
+        MSTextSetRaw(txt, @"ContactShadows", @"true", NULL);
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortShadowRangeV2"];
+        changed = YES;
+        MSLogf(@"shadow settings upgraded in UserSettings.json: CascadedShadowsRange Medium, LocalShadowsQuality Low, ContactShadows true");
     }
     if (changed && [txt writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
         MSLogf(@"start screen: resolution %@ (text edit%@)", want, unesc ? [NSString stringWithFormat:@", %lu escaped slashes repaired", (unsigned long)unesc] : @"");

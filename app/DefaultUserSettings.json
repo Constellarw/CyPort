@@ -1550,7 +1550,7 @@
                 {
                     "name": "ContactShadows",
                     "type": "bool",
-                    "value": false,
+                    "value": true,
                     "default_value": true
                 },
                 {
@@ -1590,8 +1590,8 @@
                     "name": "LocalShadowsQuality",
                     "type": "string_list",
                     "is_dynamic": false,
-                    "value": "Off",
-                    "index": 0,
+                    "value": "Low",
+                    "index": 1,
                     "default_index": 1,
                     "values": [
                         "Off",
@@ -1604,8 +1604,8 @@
                     "name": "CascadedShadowsRange",
                     "type": "string_list",
                     "is_dynamic": false,
-                    "value": "Low",
-                    "index": 0,
+                    "value": "Medium",
+                    "index": 1,
                     "default_index": 1,
                     "values": [
                         "Low",
