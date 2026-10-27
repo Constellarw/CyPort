@@ -1576,9 +1576,9 @@ static void MSWriteStreamingIni(void) {
     double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1800.0 : 5000.0;
     double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
-    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
-                     "; sector streaming balanced for traversal on mobile; strict culling and unload budget prevent memory creep\n"
+                     "; sector streaming balanced for traversal on mobile; strict unload budget prevents memory creep\n"
                      "[Streaming]\n"
                      "TimeLimitStreamedPerFrame = %.1f\n"
                      "TimeLimitSectorLoadPerFrame = %.1f\n"
@@ -1590,21 +1590,11 @@ static void MSWriteStreamingIni(void) {
                      "ObserverMaxNonAirVehicleForwardVelocity = 35.000000\n"
                      "MaxStreamingDistance = %.1f\n"
                      "\n"
-                     "[Streaming/Culling]\n"
-                     "Strict = true\n"
-                     "AutoHideDistanceNear/Enabled = true\n"
-                     "\n"
                      "[Streaming/Culling/NonAirVehicle]\n"
                      "MaxStreamingRadius = %.1f\n"
                      "\n"
                      "[ResourceBank]\n"
                      "GameResourceCacheExpirySeconds = 10\n"
-                     "\n"
-                     "[Rendering/Shadows]\n"
-                     "CascadeRange0 = 8.000000\n"
-                     "CascadeRange1 = 18.000000\n"
-                     "CascadeRange2 = 40.000000\n"
-                     "CascadeRange3 = 70.000000\n"
                      "\n"
                      "[LevelOfDetail]\n"
                      "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, nodes, maxDist, vehRadius, fogBlock];
@@ -1619,7 +1609,7 @@ static void MSWriteStreamingIni(void) {
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
         NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
-        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nDistantVolFog = False\nDistantShadows = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
         if (![rOld isEqualToString:rIni]) {
             [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
