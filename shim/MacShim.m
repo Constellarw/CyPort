@@ -1572,9 +1572,9 @@ static void MSWriteStreamingIni(void) {
     double defMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 3.5 : 5.0;
     long defNodes = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 75 : 160;
     double ms = MSCfgD(@"StreamingMsPerFrame", defMs); long nodes = (long)MSCfgD(@"StreamingNodesPerFrame", defNodes);
-    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 10.0 : 6.0;
-    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1800.0 : 5000.0;
-    double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
+    double unloadMs = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 14.0 : 6.0;
+    double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1500.0 : 5000.0;
+    double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 80.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
     NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\n"
         "VolumetricFog = False\n"
@@ -1622,7 +1622,7 @@ static void MSWriteStreamingIni(void) {
                      "MaxStreamingRadius = %.1f\n"
                      "\n"
                      "[ResourceBank]\n"
-                     "GameResourceCacheExpirySeconds = 10\n"
+                     "GameResourceCacheExpirySeconds = 4\n"
                      "\n"
                      "[Rendering/Shadows]\n"
                      "CascadeRange0 = 12.000000\n"
@@ -4202,16 +4202,17 @@ static void MSStartReadProgress(void) {
             double mem = MSFootprintMB();
             if (mem > 4800) {
                 static double lastRelief = 0;
-                if (now - lastRelief > 5.0) {
+                double reliefInterval = (mem > 5600) ? 1.0 : (mem > 5200) ? 2.5 : 4.0;
+                if (now - lastRelief > reliefInterval) {
                     lastRelief = now;
                     vm_address_t *zones = NULL; unsigned nz = 0;
-                    if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
+                    if (malloc_get_all_zones(mach_task_self(), 0, &zones) == KERN_SUCCESS && zones) {
                         for (unsigned zi = 0; zi < nz; zi++) malloc_zone_pressure_relief((malloc_zone_t *)zones[zi], 0);
-                        MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieved %u malloc zones", mem, nz);
+                        MSLogf(@"memory guard: footprint %.0f MB > 4800 MB (interval %.1fs), relieved %u malloc zones", mem, reliefInterval, nz);
                     } else {
                         void (*pressure_relief)(void *, size_t) = (void (*)(void *, size_t))dlsym(RTLD_DEFAULT, "malloc_zone_pressure_relief");
                         if (pressure_relief) {
-                            MSLogf(@"memory guard: footprint %.0f MB > 4800 MB, relieving default malloc zone", mem);
+                            MSLogf(@"memory guard: footprint %.0f MB > 4800 MB (interval %.1fs), relieving default malloc zone", mem, reliefInterval);
                             pressure_relief(NULL, 0);
                         }
                     }
