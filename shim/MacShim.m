@@ -1576,7 +1576,35 @@ static void MSWriteStreamingIni(void) {
     double maxDist = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 1800.0 : 5000.0;
     double vehRadius = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) ? 120.0 : 160.0;
     BOOL fogTweak = ![MSConfig()[@"VolumetricFog"] boolValue] && (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone);
-    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n" : @"";
+    NSString *fogBlock = fogTweak ? @"\n[Developer/FeatureToggles]\n"
+        "VolumetricFog = False\n"
+        "VolumetricClouds = False\n"
+        "DistantFog = False\n"
+        "ScreenSpaceRain = False\n"
+        "CharacterSubsurfaceScattering = False\n"
+        "Bloom = False\n"
+        "ImageBasedFlares = False\n"
+        "FilmGrain = False\n"
+        "ChromaticAberration = False\n"
+        "DepthOfField = False\n"
+        "ScreenSpaceHeatHaze = False\n"
+        "ScreenSpaceUnderwater = False\n"
+        "MotionBlur = False\n"
+        "\n[Rendering/FrostedGlass]\n"
+        "GlassUseMipChain = false\n"
+        "\n[Rendering/AsyncCompute]\n"
+        "Enable = false\n"
+        "BuildDepthChain = false\n"
+        "DynamicTexture = false\n"
+        "FlattenNormals = false\n"
+        "LutGeneration = false\n"
+        "SSAO = false\n"
+        "\n[Crowd]\n"
+        "ZCutoffEnabled = true\n"
+        "\n[Rendering/Particles]\n"
+        "MaxNoRenderSimTime = 20.000000\n"
+        "MaxOffscreenSimTime = 0.500000\n"
+        "OffscreenDynamicUpdateFrequency = 5\n" : @"";
     NSString *ini = [NSString stringWithFormat:@"%@ (written by CyPort at every start - delete this line to keep your own edits)\n"
                      "; sector streaming balanced for traversal on mobile; strict unload budget prevents memory creep\n"
                      "[Streaming]\n"
@@ -1601,9 +1629,12 @@ static void MSWriteStreamingIni(void) {
                      "CascadeRange1 = 30.000000\n"
                      "CascadeRange2 = 75.000000\n"
                      "CascadeRange3 = 150.000000\n"
+                     "CascadeUseBackfacesAsCullingPlanes = true\n"
+                     "CascadeFitToWorstCase = false\n"
                      "\n"
                      "[LevelOfDetail]\n"
-                     "DecalsHideDistance = 30.0\n%@", mark, ms, ms, unloadMs, nodes, maxDist, vehRadius, fogBlock];
+                     "DecalsHideDistance = 30.0\n"
+                     "DynamicDecalsLimit = 25\n%@", mark, ms, ms, unloadMs, nodes, maxDist, vehRadius, fogBlock];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     if (![old isEqualToString:ini]) {
         if ([ini writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
@@ -1615,7 +1646,7 @@ static void MSWriteStreamingIni(void) {
     if (fogTweak) {
         NSString *rp = [dir stringByAppendingPathComponent:@"rendering.ini"];
         NSString *rOld = [NSString stringWithContentsOfFile:rp encoding:NSUTF8StringEncoding error:nil];
-        NSString *rIni = [NSString stringWithFormat:@"%@\n[Developer/FeatureToggles]\nVolumetricFog = False\nVolumetricClouds = False\nDistantFog = False\nScreenSpaceRain = False\nCharacterSubsurfaceScattering = False\n", mark];
+        NSString *rIni = [NSString stringWithFormat:@"%@\n%@", mark, fogBlock];
         if (![rOld isEqualToString:rIni]) {
             [rIni writeToFile:rp atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
@@ -1785,6 +1816,21 @@ static void MSApplyGameSettings(NSSet *keys) {
         [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortShadowRangeV2"];
         changed = YES;
         MSLogf(@"shadow settings upgraded in UserSettings.json: CascadedShadowsRange Medium, LocalShadowsQuality Low, ContactShadows true");
+    }
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortTurboGPUV1"]) {
+        MSTextSetOption(txt, @"CascadedShadowsRange", @"Medium", 1, NULL);
+        MSTextSetOption(txt, @"CascadedShadowsResolution", @"Low", 0, NULL);
+        MSTextSetOption(txt, @"LocalShadowsQuality", @"Low", 1, NULL);
+        MSTextSetRaw(txt, @"ContactShadows", @"true", NULL);
+        MSTextSetOption(txt, @"MotionBlur", @"Off", 0, NULL);
+        MSTextSetRaw(txt, @"DepthOfField", @"false", NULL);
+        MSTextSetRaw(txt, @"FilmGrain", @"false", NULL);
+        MSTextSetRaw(txt, @"ChromaticAberration", @"false", NULL);
+        MSTextSetRaw(txt, @"LensFlares", @"false", NULL);
+        MSTextSetOption(txt, @"Anisotropy", @"8", 2, NULL);
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortTurboGPUV1"];
+        changed = YES;
+        MSLogf(@"Turbo GPU settings upgraded in UserSettings.json: post-processing stripped, shadow range Medium, ContactShadows true");
     }
     if (changed && [txt writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil])
         MSLogf(@"start screen: resolution %@ (text edit%@)", want, unesc ? [NSString stringWithFormat:@", %lu escaped slashes repaired", (unsigned long)unesc] : @"");
