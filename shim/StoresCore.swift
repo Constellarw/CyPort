@@ -258,6 +258,8 @@ enum GameFiles {
             let rel = String(f.path.dropFirst(pre.count))
             guard let top = rel.split(separator: "/").first, dataDirs.contains(top.lowercased()), rel.contains("/") else { continue }
             guard !rel.split(separator: "/").contains(where: { $0 == ".." || $0 == "." }) else { continue }
+            let lowRel = rel.lowercased()
+            if lowRel.contains("lang_en-us_") || lowRel.contains("ep1_lang_en-us_") { continue }
             f.path = rel
             if byPath[rel.lowercased()] == nil { order.append(rel.lowercased()) }
             byPath[rel.lowercased()] = f                         // a later depot (DLC, language) wins
@@ -758,7 +760,7 @@ final class SteamStore: @unchecked Sendable {
         let sid = UInt64(s["steamid"] as? String ?? "") ?? 0x0110_0001_0000_0000
         try await reconnect()
         var b = PBWriter()
-        b.u(1, SteamCM.protocolVersion); b.u(3, 0); b.u(5, 1771); b.s(6, "english"); b.u(7, 16); b.b(8, true)
+        b.u(1, SteamCM.protocolVersion); b.u(3, 0); b.u(5, 1771); b.s(6, "brazilian"); b.u(7, 16); b.b(8, true)
         b.bytes(30, machineID()); b.s(50, name); b.s(96, deviceName); b.b(102, true); b.s(108, refresh)
         let r = try await cm.logOn(b, steamID: sid)
         let res = r.i32(1) ?? 2
@@ -772,7 +774,7 @@ final class SteamStore: @unchecked Sendable {
     /// anonymous logon (Mac test tool: public app info without an account)
     func logOnAnonymous() async throws {
         try await reconnect()
-        var b = PBWriter(); b.u(1, SteamCM.protocolVersion); b.u(3, 0); b.s(6, "english"); b.u(7, 16); b.bytes(30, machineID())
+        var b = PBWriter(); b.u(1, SteamCM.protocolVersion); b.u(3, 0); b.s(6, "brazilian"); b.u(7, 16); b.bytes(30, machineID())
         let r = try await cm.logOn(b, steamID: 0x01A0_0000_0000_0000)
         guard (r.i32(1) ?? 2) == 1 else { throw SteamResult(code: r.i32(1) ?? 2, message: nil) }
         loggedOn = true
@@ -824,7 +826,7 @@ final class SteamStore: @unchecked Sendable {
             let os = (cfg?["oslist"]?.string ?? "").lowercased()
             let lang = (cfg?["language"]?.string ?? "").lowercased()
             guard os.split(separator: ",").contains("macos") else { continue }
-            guard lang.isEmpty || lang == "english" else { continue }
+            guard lang.isEmpty || lang == "brazilian" || lang == "portuguese" || lang == "pt-br" else { continue }
             guard d["depotfromapp"] == nil else { continue }
             guard (cfg?["lowviolence"]?.string ?? "0") != "1" else { continue }
             let pub = d["manifests"]?["public"]
@@ -1060,7 +1062,8 @@ final class GOGStore: @unchecked Sendable {
         let b = try Self.meta(try await Net.request(build.link))
         let depots = (b["depots"] as? [[String: Any]] ?? []).filter { d in
             let langs = d["languages"] as? [String] ?? ["*"], pid = "\(d["productId"] ?? "")"
-            return (d["isGogDepot"] as? Bool) != true && (langs.contains("*") || langs.contains("en-US") || langs.contains("en"))
+            let ptMatch = langs.contains("pt-BR") || langs.contains("pt-br") || langs.contains("pt") || langs.contains("brazilian")
+            return (d["isGogDepot"] as? Bool) != true && (langs.contains("*") || ptMatch)
                 && (pid == Game.gogProduct || owned.contains(pid))
         }
         struct ChunkRef { let product: String; let cmd5: String; let md5: String; let size: Int; let csize: Int }

@@ -232,29 +232,29 @@
                     "name": "VoiceOver",
                     "type": "name_list",
                     "is_dynamic": true,
-                    "value": "en-us",
+                    "value": "pt-br",
                     "index": 0
                 },
                 {
                     "name": "Subtitles",
                     "type": "name_list",
                     "is_dynamic": true,
-                    "value": "en-us",
-                    "index": 1
+                    "value": "pt-br",
+                    "index": 0
                 },
                 {
                     "name": "OnScreen",
                     "type": "name_list",
                     "is_dynamic": true,
-                    "value": "en-us",
-                    "index": 1
+                    "value": "pt-br",
+                    "index": 0
                 },
                 {
                     "name": "Platform",
                     "type": "name_list",
                     "is_dynamic": true,
-                    "value": "en-us",
-                    "index": 1
+                    "value": "pt-br",
+                    "index": 0
                 }
             ]
         },
