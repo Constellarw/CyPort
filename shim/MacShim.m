@@ -4206,7 +4206,7 @@ static void MSStartReadProgress(void) {
                 if (now - lastRelief > reliefInterval) {
                     lastRelief = now;
                     vm_address_t *zones = NULL; unsigned nz = 0;
-                    if (malloc_get_all_zones(mach_task_self(), 0, &zones) == KERN_SUCCESS && zones) {
+                    if (malloc_get_all_zones(mach_task_self(), 0, &zones, &nz) == KERN_SUCCESS && zones) {
                         for (unsigned zi = 0; zi < nz; zi++) malloc_zone_pressure_relief((malloc_zone_t *)zones[zi], 0);
                         MSLogf(@"memory guard: footprint %.0f MB > 4800 MB (interval %.1fs), relieved %u malloc zones", mem, reliefInterval, nz);
                     } else {
