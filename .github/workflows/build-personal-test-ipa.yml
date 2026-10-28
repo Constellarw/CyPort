@@ -17,11 +17,11 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -99,17 +99,3 @@ jobs:
           path: ${{ runner.temp }}/com.example.cyport.ipa
           if-no-files-found: error
           retention-days: 3
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          TAG="test-build-${GITHUB_SHA:0:7}"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release delete "$TAG" --yes
-          fi
-          gh release create "$TAG" "$RUNNER_TEMP/com.example.cyport.ipa#CyPort.ipa" \
-            --title "CyPort iOS Test - Anti-Jetsam & PT-BR Native (${GITHUB_SHA:0:7})" \
-            --notes "Build with Anti-Jetsam memory guards, Turbo GPU optimizations, shadow enhancements, and native PT-BR audio/subtitles/menu support." \
-            --prerelease
