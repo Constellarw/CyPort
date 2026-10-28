@@ -354,8 +354,9 @@ struct SteamLoginView: View {
         // reconnects when it comes back
         var bg = UIBackgroundTaskIdentifier.invalid
         bg = UIApplication.shared.beginBackgroundTask { UIApplication.shared.endBackgroundTask(bg); bg = .invalid }
-        poller = Task {
-            defer { if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) } }
+        let taskBg = bg
+        poller = Task { @MainActor in
+            defer { if taskBg != .invalid { UIApplication.shared.endBackgroundTask(taskBg) } }
             var failures = 0
             while !Task.isCancelled {
                 do {

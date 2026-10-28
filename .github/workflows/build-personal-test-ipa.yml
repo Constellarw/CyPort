@@ -54,7 +54,7 @@ jobs:
           TOOLCHAIN="$(dirname "$(dirname "$SWIFTC")")"
           SWIFT_OBJECT="$RUNNER_TEMP/Launcher.o"
 
-          "$SWIFTC" -target arm64-apple-ios16.0 -sdk "$SDK" -O -parse-as-library \
+          "$SWIFTC" -swift-version 5 -target arm64-apple-ios16.0 -sdk "$SDK" -O -parse-as-library \
             -emit-object -module-name MacShimUI -wmo \
             shim/Launcher.swift shim/StoresCore.swift shim/StoresUI.swift shim/GameCloud.swift \
             -o "$SWIFT_OBJECT"
