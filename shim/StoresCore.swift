@@ -1126,17 +1126,14 @@ final class GOGStore: @unchecked Sendable {
         let plain = try Inflate.run(z, expected: expectedSize)
         guard plain.count == expectedSize, Hash.md5(plain).hex == expectedMd5 else { throw StoreError("GOG text archive checksum mismatch") }
 
-        let targetDirs = [
-            destDir.appendingPathComponent("archive/Mac/content"),
-            destDir.appendingPathComponent("archive/mac/content")
-        ]
         let fm = FileManager.default
-        for dir in targetDirs {
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            let fileURL = dir.appendingPathComponent("lang_en_text.archive")
-            try plain.write(to: fileURL, options: .atomic)
-        }
-        storeLog("gog: downloaded and restored lang_en_text.archive (7.7 MB) successfully")
+        let macCap = destDir.appendingPathComponent("archive/Mac/content")
+        let macLow = destDir.appendingPathComponent("archive/mac/content")
+        let targetDir = fm.fileExists(atPath: macCap.path) ? macCap : (fm.fileExists(atPath: macLow.path) ? macLow : macCap)
+        try? fm.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        let fileURL = targetDir.appendingPathComponent("lang_en_text.archive")
+        try plain.write(to: fileURL, options: .atomic)
+        storeLog("gog: downloaded and restored lang_en_text.archive (7.7 MB) into \(targetDir.path)")
     }
 }
 

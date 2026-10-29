@@ -1198,13 +1198,38 @@ static NSString *MSDataRoot(void) {            /* nil => setup screen (import / 
     dispatch_once(&o, ^{
         g_hadBookmark = [NSUserDefaults.standardUserDefaults dataForKey:kBookmarkKey] != nil;
         /* a copy in the app's own Documents (imported, or copied in with the Files app) wins: no drive to drop off the bus */
-        if (MSLooksLikeGameFolder(MSInternalRoot())) { g_root = MSInternalRoot(); return; }
-        if ([NSFileManager.defaultManager fileExistsAtPath:MSImportRoot()]) return;     /* unfinished import: setup resumes it */
-        /* right after the SSD is plugged in (or re-enumerates) iOS needs a few seconds to mount it */
-        for (int i = 0; g_hadBookmark && i < 16; i++) {
-            NSURL *u = MSResolveBookmark();
-            if (u) { g_scopedURL = u; g_root = u.path; g_external = YES; break; }
-            usleep(500000);
+        if (MSLooksLikeGameFolder(MSInternalRoot())) { g_root = MSInternalRoot(); }
+        else if (![NSFileManager.defaultManager fileExistsAtPath:MSImportRoot()]) {
+            /* right after the SSD is plugged in (or re-enumerates) iOS needs a few seconds to mount it */
+            for (int i = 0; g_hadBookmark && i < 16; i++) {
+                NSURL *u = MSResolveBookmark();
+                if (u) { g_scopedURL = u; g_root = u.path; g_external = YES; break; }
+                usleep(500000);
+            }
+        }
+        if (g_root) {
+            NSString *macLow = [g_root stringByAppendingPathComponent:@"archive/mac"];
+            NSString *macCap = [g_root stringByAppendingPathComponent:@"archive/Mac"];
+            NSFileManager *fm = NSFileManager.defaultManager;
+            BOOL isDirLow = NO, isDirCap = NO;
+            if ([fm fileExistsAtPath:macLow isDirectory:&isDirLow] && isDirLow &&
+                [fm fileExistsAtPath:macCap isDirectory:&isDirCap] && isDirCap) {
+                NSDirectoryEnumerator *e = [fm enumeratorAtPath:macLow];
+                NSString *sub;
+                while ((sub = [e nextObject])) {
+                    NSString *src = [macLow stringByAppendingPathComponent:sub];
+                    NSString *dst = [macCap stringByAppendingPathComponent:sub];
+                    BOOL subDir = NO;
+                    if ([fm fileExistsAtPath:src isDirectory:&subDir] && !subDir) {
+                        [fm createDirectoryAtPath:dst.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+                        if (![fm fileExistsAtPath:dst]) {
+                            [fm copyItemAtPath:src toPath:dst error:nil];
+                        }
+                    }
+                }
+                [fm removeItemAtPath:macLow error:nil];
+                MSLogf(@"directory fix: merged archive/mac into archive/Mac and removed duplicate archive/mac");
+            }
         }
     });
     return g_root;
