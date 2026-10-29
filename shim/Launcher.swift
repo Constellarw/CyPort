@@ -57,6 +57,16 @@ private struct LauncherView: View {
     @AppStorage("CyPortLowLatency") private var lowLatency = false
     /// read by the shim (MSSmoothOn): hold the game to an even 120/60/40/30 it can keep up with
     @AppStorage("CyPortSmoothPacing") private var smoothPacing = true
+    @State private var showingStore = false
+
+    private var isMissingLocalizationText: Bool {
+        let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
+        let gameDir = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
+        guard FileManager.default.fileExists(atPath: gameDir.path) else { return false }
+        let macText = gameDir.appendingPathComponent("archive/Mac/content/lang_en_text.archive")
+        let pcText = gameDir.appendingPathComponent("archive/pc/content/lang_en-us_text.archive")
+        return !FileManager.default.fileExists(atPath: macText.path) && !FileManager.default.fileExists(atPath: pcText.path)
+    }
 
     /// a 300 pt wide boxed row like the Resolution button; the switch keeps its own size so it is never pushed off the edge
     private func switchRow(_ title: String, icon: String, isOn: Binding<Bool>, note: String) -> some View {
@@ -199,6 +209,26 @@ private struct LauncherView: View {
                         }
                     }
 
+                    if isMissingLocalizationText {
+                        Button {
+                            showingStore = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(cyberRed)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Text missing (lang_en_text.archive)").font(.caption.weight(.bold)).foregroundStyle(.white)
+                                    Text("Tap to download missing text (~8 MB)").font(.caption2).foregroundStyle(cyberYellow)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(cyberYellow)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .frame(width: 300)
+                            .background(cyberRed.opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(cyberRed.opacity(0.6)))
+                        }
+                    }
+
                     Button {
                         guard !model.starting else { return }
                         model.starting = true
@@ -217,6 +247,19 @@ private struct LauncherView: View {
                     }
                     .disabled(model.starting || model.syncing)
                     .padding(.top, 4)
+
+                    Button {
+                        showingStore = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Store / Verify Game Files…")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .frame(width: 300)
+                    .padding(.top, 2)
                 }
                 .padding(.vertical, 16).padding(.horizontal, 2)
                 }
@@ -228,6 +271,13 @@ private struct LauncherView: View {
         .onAppear { model.sync() }
         .sheet(isPresented: $model.signingIn) {
             LoginSheet(store: model.source.store) { model.signedInNow() }
+        }
+        .fullScreenCover(isPresented: $showingStore) {
+            let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
+            let downloadRoot = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077 (downloading)")
+            let internalRoot = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
+            let storeModel = StoreModel(downloadRoot: downloadRoot, internalRoot: internalRoot, bookmarkKey: "MacShimDataBookmark2")
+            StoreView(model: storeModel)
         }
         .persistentSystemOverlays(.hidden)
         .statusBarHidden(true)

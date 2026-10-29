@@ -59,7 +59,14 @@ final class StoreModel: ObservableObject {
         }
     }
     var gameFolder: URL {
-        switch destination { case .phone: return downloadRoot; case .folder(let u): return u.appendingPathComponent("Cyberpunk 2077", isDirectory: true) }
+        switch destination {
+        case .phone:
+            if FileManager.default.fileExists(atPath: internalRoot.path) && !FileManager.default.fileExists(atPath: downloadRoot.path) {
+                return internalRoot
+            }
+            return downloadRoot
+        case .folder(let u): return u.appendingPathComponent("Cyberpunk 2077", isDirectory: true)
+        }
     }
     var resuming: Bool { FileManager.default.fileExists(atPath: gameFolder.appendingPathComponent(".cyport-download.json").path) }
 
@@ -124,8 +131,10 @@ final class StoreModel: ObservableObject {
         let fm = FileManager.default
         switch destination {
         case .phone:
-            if fm.fileExists(atPath: internalRoot.path) { try fm.removeItem(at: internalRoot) }
-            try fm.moveItem(at: dest, to: internalRoot)
+            if dest.standardizedFileURL != internalRoot.standardizedFileURL {
+                if fm.fileExists(atPath: internalRoot.path) { try fm.removeItem(at: internalRoot) }
+                try fm.moveItem(at: dest, to: internalRoot)
+            }
             try? "ok\n".write(to: internalRoot.appendingPathComponent(".copy-complete"), atomically: true, encoding: .utf8)
             phase = .done("Cyberpunk 2077 is on this iPhone. Open the app again to play.")
         case .folder:
@@ -184,7 +193,10 @@ struct StoreView: View {
         case .done(let m):
             Text("Done").font(.title.bold()).foregroundColor(.green)
             Text(m).foregroundColor(.white)
-            Button("Close the app") { exit(0) }.buttonStyle(.borderedProminent).tint(.yellow).foregroundColor(.black)
+            HStack(spacing: 12) {
+                Button("Return to Launcher") { dismiss() }.buttonStyle(.bordered).tint(.yellow)
+                Button("Close the app") { exit(0) }.buttonStyle(.borderedProminent).tint(.yellow).foregroundColor(.black)
+            }
         }
     }
 

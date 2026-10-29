@@ -259,9 +259,10 @@ enum GameFiles {
             guard let top = rel.split(separator: "/").first, dataDirs.contains(top.lowercased()), rel.contains("/") else { continue }
             guard !rel.split(separator: "/").contains(where: { $0 == ".." || $0 == "." }) else { continue }
             let lowRel = rel.lowercased()
-            let isEnglish = lowRel.contains("lang_en_") || lowRel.contains("lang_en-us_") ||
-                            lowRel.contains("ep1_lang_en_") || lowRel.contains("ep1_lang_en-us_")
-            if isEnglish { continue }
+            // Drop ONLY English VOICE archives (~5 GB). KEEP all text archives (~8 MB) required for engine UI, fonts and dialogue subtitles.
+            let isEnglishVoice = lowRel.contains("lang_en_voice") || lowRel.contains("lang_en-us_voice") ||
+                                 lowRel.contains("ep1_lang_en_voice") || lowRel.contains("ep1_lang_en-us_voice")
+            if isEnglishVoice { continue }
             f.path = rel
             if byPath[rel.lowercased()] == nil { order.append(rel.lowercased()) }
             byPath[rel.lowercased()] = f                         // a later depot (DLC, language) wins
