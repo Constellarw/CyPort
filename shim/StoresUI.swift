@@ -61,7 +61,8 @@ final class StoreModel: ObservableObject {
     var gameFolder: URL {
         switch destination {
         case .phone:
-            if FileManager.default.fileExists(atPath: internalRoot.path) && !FileManager.default.fileExists(atPath: downloadRoot.path) {
+            if FileManager.default.fileExists(atPath: internalRoot.appendingPathComponent("archive").path) ||
+               FileManager.default.fileExists(atPath: internalRoot.path) {
                 return internalRoot
             }
             return downloadRoot

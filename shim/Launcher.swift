@@ -58,14 +58,43 @@ private struct LauncherView: View {
     /// read by the shim (MSSmoothOn): hold the game to an even 120/60/40/30 it can keep up with
     @AppStorage("CyPortSmoothPacing") private var smoothPacing = true
     @State private var showingStore = false
+    @State private var fixingText = false
+    @State private var fixError: String?
+    @State private var textFixed = false
 
     private var isMissingLocalizationText: Bool {
+        if textFixed { return false }
         let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
         let gameDir = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
         guard FileManager.default.fileExists(atPath: gameDir.path) else { return false }
         let macText = gameDir.appendingPathComponent("archive/Mac/content/lang_en_text.archive")
+        let macTextLow = gameDir.appendingPathComponent("archive/mac/content/lang_en_text.archive")
         let pcText = gameDir.appendingPathComponent("archive/pc/content/lang_en-us_text.archive")
-        return !FileManager.default.fileExists(atPath: macText.path) && !FileManager.default.fileExists(atPath: pcText.path)
+        return !FileManager.default.fileExists(atPath: macText.path) &&
+               !FileManager.default.fileExists(atPath: macTextLow.path) &&
+               !FileManager.default.fileExists(atPath: pcText.path)
+    }
+
+    private func repairMissingText() {
+        guard !fixingText else { return }
+        fixingText = true
+        fixError = nil
+        Task { @MainActor in
+            do {
+                let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
+                let gameDir = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
+                if GOGStore.shared.signedIn {
+                    try await GOGStore.shared.downloadMacTextArchive(to: gameDir)
+                    textFixed = true
+                } else {
+                    showingStore = true
+                }
+            } catch {
+                fixError = error.localizedDescription
+                showingStore = true
+            }
+            fixingText = false
+        }
     }
 
     /// a 300 pt wide boxed row like the Resolution button; the switch keeps its own size so it is never pushed off the edge
@@ -211,22 +240,32 @@ private struct LauncherView: View {
 
                     if isMissingLocalizationText {
                         Button {
-                            showingStore = true
+                            repairMissingText()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(cyberRed)
+                                if fixingText {
+                                    ProgressView().tint(cyberYellow).controlSize(.small)
+                                } else {
+                                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(cyberRed)
+                                }
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Text missing (lang_en_text.archive)").font(.caption.weight(.bold)).foregroundStyle(.white)
-                                    Text("Tap to download missing text (~8 MB)").font(.caption2).foregroundStyle(cyberYellow)
+                                    Text(fixingText ? "Baixando texto (7.7 MB)…" : "Texto ausente (lang_en_text.archive)")
+                                        .font(.caption.weight(.bold)).foregroundStyle(.white)
+                                    Text(fixingText ? "Gravando arquivos no jogo…" : (fixError != nil ? "Erro: \(fixError!). Toque para abrir Loja." : "Toque aqui para baixar o texto (~8 MB)"))
+                                        .font(.caption2).foregroundStyle(cyberYellow)
+                                        .lineLimit(2)
                                 }
                                 Spacer()
-                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(cyberYellow)
+                                if !fixingText {
+                                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(cyberYellow)
+                                }
                             }
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .frame(width: 300)
                             .background(cyberRed.opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(cyberRed.opacity(0.6)))
                         }
+                        .disabled(fixingText)
                     }
 
                     Button {

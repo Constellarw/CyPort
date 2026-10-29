@@ -301,7 +301,11 @@ final class Downloader: @unchecked Sendable {
     }
     /// bytes still to download (for the free-space check)
     func remainingBytes() -> Int64 {
-        plan.files.reduce(0) { $0 + max(0, $1.size - min(journal[$1.path] ?? 0, onDisk($1.path))) }
+        plan.files.reduce(0) { sum, f in
+            let disk = onDisk(f.path)
+            let good = (disk == f.size) ? f.size : min(journal[f.path] ?? disk, disk)
+            return sum + max(0, f.size - good)
+        }
     }
     private func onDisk(_ p: String) -> Int64 { (try? FileManager.default.attributesOfItem(atPath: dest.appendingPathComponent(p).path)[.size] as? NSNumber)?.int64Value ?? 0 }
 
@@ -313,7 +317,8 @@ final class Downloader: @unchecked Sendable {
         // where each file starts again: whole parts only, never past what is on disk
         var starts: [(file: Int, part: Int, offset: Int64)] = []
         for (i, f) in plan.files.enumerated() {
-            let good = min(journal[f.path] ?? 0, onDisk(f.path))
+            let disk = onDisk(f.path)
+            let good = (disk == f.size) ? f.size : min(journal[f.path] ?? disk, disk)
             var part = 0, off: Int64 = 0
             while part < f.parts.count, off + Int64(f.parts[part].length) <= good { off += Int64(f.parts[part].length); part += 1 }
             if f.size == 0 { part = 0; off = 0 }
@@ -1107,6 +1112,31 @@ final class GOGStore: @unchecked Sendable {
             }
             throw last
         })
+    }
+
+    /// Quickly fetches and inflates only the missing lang_en_text.archive (7.7 MB) directly into the game folder
+    func downloadMacTextArchive(to destDir: URL) async throws {
+        let links = GOGLinks(store: self)
+        let cmd5 = "7141d0a0e624aec890f531760bbdacaa"
+        let expectedMd5 = "cff0e3df34b404ea52e3b5c6788304f8"
+        let expectedSize = 7782400
+        let url = try await links.url(product: Game.gogProduct, path: "/71/41/\(cmd5)", renew: false)
+        let z = try await Net.request(url, tries: 3)
+        guard Hash.md5(z).hex == cmd5 else { throw StoreError("GOG chunk damaged in transit") }
+        let plain = try Inflate.run(z, expected: expectedSize)
+        guard plain.count == expectedSize, Hash.md5(plain).hex == expectedMd5 else { throw StoreError("GOG text archive checksum mismatch") }
+
+        let targetDirs = [
+            destDir.appendingPathComponent("archive/Mac/content"),
+            destDir.appendingPathComponent("archive/mac/content")
+        ]
+        let fm = FileManager.default
+        for dir in targetDirs {
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let fileURL = dir.appendingPathComponent("lang_en_text.archive")
+            try plain.write(to: fileURL, options: .atomic)
+        }
+        storeLog("gog: downloaded and restored lang_en_text.archive (7.7 MB) successfully")
     }
 }
 
