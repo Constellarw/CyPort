@@ -259,7 +259,9 @@ enum GameFiles {
             guard let top = rel.split(separator: "/").first, dataDirs.contains(top.lowercased()), rel.contains("/") else { continue }
             guard !rel.split(separator: "/").contains(where: { $0 == ".." || $0 == "." }) else { continue }
             let lowRel = rel.lowercased()
-            if lowRel.contains("lang_en-us_") || lowRel.contains("ep1_lang_en-us_") { continue }
+            let isEnglish = lowRel.contains("lang_en_") || lowRel.contains("lang_en-us_") ||
+                            lowRel.contains("ep1_lang_en_") || lowRel.contains("ep1_lang_en-us_")
+            if isEnglish { continue }
             f.path = rel
             if byPath[rel.lowercased()] == nil { order.append(rel.lowercased()) }
             byPath[rel.lowercased()] = f                         // a later depot (DLC, language) wins
