@@ -1857,17 +1857,24 @@ static void MSApplyGameSettings(NSSet *keys) {
         changed = YES;
         MSLogf(@"Turbo GPU settings upgraded in UserSettings.json: post-processing stripped, shadow range Medium, ContactShadows true");
     }
-    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortLangPTBRv2"]) {
-        MSTextSetOption(txt, @"VoiceOver", @"pt-br", -1, NULL);
-        MSTextSetOption(txt, @"Subtitles", @"pt-br", -1, NULL);
-        MSTextSetOption(txt, @"OnScreen", @"pt-br", -1, NULL);
-        MSTextSetOption(txt, @"Platform", @"pt-br", -1, NULL);
-        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortLangPTBRv2"];
+    if (![NSUserDefaults.standardUserDefaults boolForKey:@"CyPortLangPTBRv3"]) {
+        MSTextSetOption(txt, @"VoiceOver", @"pt-br", 0, NULL);
+        MSTextSetOption(txt, @"Subtitles", @"pt-br", 0, NULL);
+        MSTextSetOption(txt, @"OnScreen", @"pt-br", 0, NULL);
+        MSTextSetOption(txt, @"Platform", @"pt-br", 0, NULL);
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CyPortLangPTBRv3"];
         changed = YES;
-        MSLogf(@"language: set to pt-br in UserSettings.json (VoiceOver, Subtitles, OnScreen, Platform)");
+        MSLogf(@"language: forced pt-br in UserSettings.json (VoiceOver, Subtitles, OnScreen, Platform)");
     }
     NSString *root = g_root;
     if (root) {
+        NSFileManager *fm = NSFileManager.defaultManager;
+        NSString *macDir = [root stringByAppendingPathComponent:@"archive/Mac"];
+        NSString *pcDir = [root stringByAppendingPathComponent:@"archive/pc"];
+        if ([fm fileExistsAtPath:macDir] && ![fm fileExistsAtPath:pcDir]) {
+            [fm createSymbolicLinkAtPath:pcDir withDestinationPath:@"Mac" error:nil];
+            MSLogf(@"language: symlinked archive/pc -> Mac for PC path compatibility");
+        }
         NSArray<NSString *> *contentDirs = @[
             [root stringByAppendingPathComponent:@"archive/pc/content"],
             [root stringByAppendingPathComponent:@"archive/mac/content"],
@@ -1876,16 +1883,30 @@ static void MSApplyGameSettings(NSSet *keys) {
         for (NSString *dir in contentDirs) {
             NSString *ptVoice = [dir stringByAppendingPathComponent:@"lang_pt_voice.archive"];
             NSString *ptBrVoice = [dir stringByAppendingPathComponent:@"lang_pt-br_voice.archive"];
-            BOOL hasPt = [NSFileManager.defaultManager fileExistsAtPath:ptVoice] || [NSFileManager.defaultManager fileExistsAtPath:ptBrVoice];
+            if ([fm fileExistsAtPath:ptVoice] && ![fm fileExistsAtPath:ptBrVoice]) {
+                [fm linkItemAtPath:ptVoice toPath:ptBrVoice error:nil];
+                MSLogf(@"language: linked %@/lang_pt-br_voice.archive -> lang_pt_voice.archive", dir);
+            } else if ([fm fileExistsAtPath:ptBrVoice] && ![fm fileExistsAtPath:ptVoice]) {
+                [fm linkItemAtPath:ptBrVoice toPath:ptVoice error:nil];
+                MSLogf(@"language: linked %@/lang_pt_voice.archive -> lang_pt-br_voice.archive", dir);
+            }
+            NSString *ptText = [dir stringByAppendingPathComponent:@"lang_pt_text.archive"];
+            NSString *ptBrText = [dir stringByAppendingPathComponent:@"lang_pt-br_text.archive"];
+            if ([fm fileExistsAtPath:ptText] && ![fm fileExistsAtPath:ptBrText]) {
+                [fm linkItemAtPath:ptText toPath:ptBrText error:nil];
+            } else if ([fm fileExistsAtPath:ptBrText] && ![fm fileExistsAtPath:ptText]) {
+                [fm linkItemAtPath:ptBrText toPath:ptText error:nil];
+            }
+            BOOL hasPt = [fm fileExistsAtPath:ptVoice] || [fm fileExistsAtPath:ptBrVoice];
             if (hasPt) {
                 NSString *enVoice = [dir stringByAppendingPathComponent:@"lang_en_voice.archive"];
                 NSString *enUsVoice = [dir stringByAppendingPathComponent:@"lang_en-us_voice.archive"];
-                if ([NSFileManager.defaultManager fileExistsAtPath:enVoice]) {
-                    if ([NSFileManager.defaultManager removeItemAtPath:enVoice error:nil])
+                if ([fm fileExistsAtPath:enVoice]) {
+                    if ([fm removeItemAtPath:enVoice error:nil])
                         MSLogf(@"language: deleted %@/lang_en_voice.archive to save ~5 GB (PT voice detected)", dir);
                 }
-                if ([NSFileManager.defaultManager fileExistsAtPath:enUsVoice]) {
-                    if ([NSFileManager.defaultManager removeItemAtPath:enUsVoice error:nil])
+                if ([fm fileExistsAtPath:enUsVoice]) {
+                    if ([fm removeItemAtPath:enUsVoice error:nil])
                         MSLogf(@"language: deleted %@/lang_en-us_voice.archive to save ~5 GB (PT-BR voice detected)", dir);
                 }
             }
@@ -1898,16 +1919,21 @@ static void MSApplyGameSettings(NSSet *keys) {
         for (NSString *dir in ep1Dirs) {
             NSString *ptVoice = [dir stringByAppendingPathComponent:@"lang_pt_voice.archive"];
             NSString *ptBrVoice = [dir stringByAppendingPathComponent:@"ep1_lang_pt-br_voice.archive"];
-            BOOL hasPt = [NSFileManager.defaultManager fileExistsAtPath:ptVoice] || [NSFileManager.defaultManager fileExistsAtPath:ptBrVoice];
+            if ([fm fileExistsAtPath:ptVoice] && ![fm fileExistsAtPath:ptBrVoice]) {
+                [fm linkItemAtPath:ptVoice toPath:ptBrVoice error:nil];
+            } else if ([fm fileExistsAtPath:ptBrVoice] && ![fm fileExistsAtPath:ptVoice]) {
+                [fm linkItemAtPath:ptBrVoice toPath:ptVoice error:nil];
+            }
+            BOOL hasPt = [fm fileExistsAtPath:ptVoice] || [fm fileExistsAtPath:ptBrVoice];
             if (hasPt) {
                 NSString *enVoice = [dir stringByAppendingPathComponent:@"lang_en_voice.archive"];
                 NSString *enUsVoice = [dir stringByAppendingPathComponent:@"ep1_lang_en-us_voice.archive"];
-                if ([NSFileManager.defaultManager fileExistsAtPath:enVoice]) {
-                    if ([NSFileManager.defaultManager removeItemAtPath:enVoice error:nil])
+                if ([fm fileExistsAtPath:enVoice]) {
+                    if ([fm removeItemAtPath:enVoice error:nil])
                         MSLogf(@"language: deleted %@/lang_en_voice.archive to save space (PT voice detected)", dir);
                 }
-                if ([NSFileManager.defaultManager fileExistsAtPath:enUsVoice]) {
-                    if ([NSFileManager.defaultManager removeItemAtPath:enUsVoice error:nil])
+                if ([fm fileExistsAtPath:enUsVoice]) {
+                    if ([fm removeItemAtPath:enUsVoice error:nil])
                         MSLogf(@"language: deleted %@/ep1_lang_en-us_voice.archive to save space (PT-BR voice detected)", dir);
                 }
             }
