@@ -77,7 +77,7 @@ private struct LauncherView: View {
 
     private var isMissingVoicePack: Bool {
         let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
-        let gameDir = URL(fileURLPathComponent: docs).appendingPathComponent("Cyberpunk 2077")
+        let gameDir = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
         guard FileManager.default.fileExists(atPath: gameDir.path) else { return false }
         let fm = FileManager.default
         let ptVoiceMac = gameDir.appendingPathComponent("archive/Mac/content/lang_pt_voice.archive")
