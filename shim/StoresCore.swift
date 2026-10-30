@@ -299,6 +299,24 @@ final class Downloader: @unchecked Sendable {
         lock.lock(); let files = journal; lock.unlock()
         if let d = try? JSONSerialization.data(withJSONObject: ["version": plan.version, "files": files]) { try? d.write(to: journalURL, options: .atomic) }
     }
+    private func destURL(for p: String) -> URL {
+        let u = dest.appendingPathComponent(p)
+        if FileManager.default.fileExists(atPath: u.path) { return u }
+        let alt: String
+        if p.contains("archive/Mac/") {
+            alt = p.replacingOccurrences(of: "archive/Mac/", with: "archive/mac/")
+        } else if p.contains("archive/mac/") {
+            alt = p.replacingOccurrences(of: "archive/mac/", with: "archive/Mac/")
+        } else {
+            return u
+        }
+        let uAlt = dest.appendingPathComponent(alt)
+        if FileManager.default.fileExists(atPath: uAlt.path) || FileManager.default.fileExists(atPath: uAlt.deletingLastPathComponent().path) {
+            return uAlt
+        }
+        return u
+    }
+
     /// bytes still to download (for the free-space check)
     func remainingBytes() -> Int64 {
         plan.files.reduce(0) { sum, f in
@@ -307,7 +325,7 @@ final class Downloader: @unchecked Sendable {
             return sum + max(0, f.size - good)
         }
     }
-    private func onDisk(_ p: String) -> Int64 { (try? FileManager.default.attributesOfItem(atPath: dest.appendingPathComponent(p).path)[.size] as? NSNumber)?.int64Value ?? 0 }
+    private func onDisk(_ p: String) -> Int64 { (try? FileManager.default.attributesOfItem(atPath: destURL(for: p).path)[.size] as? NSNumber)?.int64Value ?? 0 }
 
     func run(progress: @escaping (Progress) -> Void) async throws {
         let fm = FileManager.default
@@ -365,7 +383,7 @@ final class Downloader: @unchecked Sendable {
         var qi = 0
         // files that already finished (or are empty) still need to exist
         for s in starts where plan.files[s.file].parts.isEmpty || s.part == plan.files[s.file].parts.count {
-            let u = dest.appendingPathComponent(plan.files[s.file].path)
+            let u = destURL(for: plan.files[s.file].path)
             try fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
             if !fm.fileExists(atPath: u.path) { fm.createFile(atPath: u.path, contents: nil) }
         }
@@ -375,7 +393,7 @@ final class Downloader: @unchecked Sendable {
             let (fi, pi) = queue[qi]; let f = plan.files[fi], part = f.parts[pi]
             if fi != currentFile {
                 try current?.synchronize(); try current?.close(); current = nil
-                let u = dest.appendingPathComponent(f.path)
+                let u = destURL(for: f.path)
                 try fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
                 if !fm.fileExists(atPath: u.path) { fm.createFile(atPath: u.path, contents: nil) }
                 let h = try FileHandle(forWritingTo: u)

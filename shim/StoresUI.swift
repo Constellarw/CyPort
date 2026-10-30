@@ -50,12 +50,15 @@ final class StoreModel: ObservableObject {
     @Published var freeBytes: Int64 = 0
     private var task: Task<Void, Never>?
 
-    init(downloadRoot: URL, internalRoot: URL, bookmarkKey: String) {
+    init(downloadRoot: URL, internalRoot: URL, bookmarkKey: String, autoPrepare: StoreKind? = nil) {
         self.downloadRoot = downloadRoot; self.internalRoot = internalRoot; self.bookmarkKey = bookmarkKey
         // a download into a folder that didn't finish: offer to continue there
         if let bm = UserDefaults.standard.data(forKey: "CyPortDownloadFolder") {
             var stale = false
             if let u = try? URL(resolvingBookmarkData: bm, bookmarkDataIsStale: &stale), u.startAccessingSecurityScopedResource() { destination = .folder(u) }
+        }
+        if let auto = autoPrepare {
+            prepare(auto)
         }
     }
     var gameFolder: URL {
@@ -252,7 +255,14 @@ struct StoreView: View {
                 HStack {
                     Button("Back") { model.phase = .choose }
                     Spacer()
-                    Button(model.resuming ? "Continue download" : "Download") { model.start() }
+                    let downloadButtonTitle: String = {
+                        if model.resuming { return "Continue download" }
+                        if model.needBytes < (p.totalBytes - 1_000_000_000) {
+                            return "Download missing files (\(gb(model.needBytes)))"
+                        }
+                        return "Download"
+                    }()
+                    Button(downloadButtonTitle) { model.start() }
                         .buttonStyle(.borderedProminent).tint(.yellow).foregroundColor(.black)
                         .disabled(model.needBytes > model.freeBytes)
                 }

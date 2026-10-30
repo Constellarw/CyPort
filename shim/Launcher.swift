@@ -75,6 +75,25 @@ private struct LauncherView: View {
                !FileManager.default.fileExists(atPath: pcText.path)
     }
 
+    private var isMissingVoicePack: Bool {
+        let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
+        let gameDir = URL(fileURLPathComponent: docs).appendingPathComponent("Cyberpunk 2077")
+        guard FileManager.default.fileExists(atPath: gameDir.path) else { return false }
+        let fm = FileManager.default
+        let ptVoiceMac = gameDir.appendingPathComponent("archive/Mac/content/lang_pt_voice.archive")
+        let ptVoiceLow = gameDir.appendingPathComponent("archive/mac/content/lang_pt_voice.archive")
+        let enVoiceMac = gameDir.appendingPathComponent("archive/Mac/content/lang_en_voice.archive")
+        let enVoiceLow = gameDir.appendingPathComponent("archive/mac/content/lang_en_voice.archive")
+        let pcVoicePt = gameDir.appendingPathComponent("archive/pc/content/lang_pt-br_voice.archive")
+        let pcVoiceEn = gameDir.appendingPathComponent("archive/pc/content/lang_en-us_voice.archive")
+        return !fm.fileExists(atPath: ptVoiceMac.path) &&
+               !fm.fileExists(atPath: ptVoiceLow.path) &&
+               !fm.fileExists(atPath: enVoiceMac.path) &&
+               !fm.fileExists(atPath: enVoiceLow.path) &&
+               !fm.fileExists(atPath: pcVoicePt.path) &&
+               !fm.fileExists(atPath: pcVoiceEn.path)
+    }
+
     private func repairMissingText() {
         guard !fixingText else { return }
         fixingText = true
@@ -268,6 +287,30 @@ private struct LauncherView: View {
                         .disabled(fixingText)
                     }
 
+                    if isMissingVoicePack {
+                        Button {
+                            showingStore = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "speaker.wave.2.trianglebadge.exclamationmark.fill")
+                                    .foregroundStyle(cyberYellow)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Dublagem ausente (Sem som na fala)")
+                                        .font(.caption.weight(.bold)).foregroundStyle(.white)
+                                    Text("Toque aqui para baixar as vozes em PT-BR (~4.9 GB)")
+                                        .font(.caption2).foregroundStyle(cyberYellow)
+                                        .lineLimit(2)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(cyberYellow)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .frame(width: 300)
+                            .background(cyberYellow.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(cyberYellow.opacity(0.6)))
+                        }
+                    }
+
                     Button {
                         guard !model.starting else { return }
                         model.starting = true
@@ -315,7 +358,8 @@ private struct LauncherView: View {
             let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? NSHomeDirectory()
             let downloadRoot = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077 (downloading)")
             let internalRoot = URL(fileURLWithPath: docs).appendingPathComponent("Cyberpunk 2077")
-            let storeModel = StoreModel(downloadRoot: downloadRoot, internalRoot: internalRoot, bookmarkKey: "MacShimDataBookmark2")
+            let auto: StoreKind? = GOGStore.shared.signedIn ? .gog : nil
+            let storeModel = StoreModel(downloadRoot: downloadRoot, internalRoot: internalRoot, bookmarkKey: "MacShimDataBookmark2", autoPrepare: auto)
             StoreView(model: storeModel)
         }
         .persistentSystemOverlays(.hidden)
